@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="Leiningen: ysera:1.2.0">
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/ysera/ysera/1.2.0/ysera-1.2.0.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

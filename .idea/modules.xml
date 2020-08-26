@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/crumborn.iml" filepath="$PROJECT_DIR$/crumborn.iml" />
+      <module fileurl="file://$USER_HOME$/mypage-figwheel/mypage-engine/mypage-engine.iml" filepath="$USER_HOME$/mypage-figwheel/mypage-engine/mypage-engine.iml" />
+    </modules>
+  </component>
+</project>
