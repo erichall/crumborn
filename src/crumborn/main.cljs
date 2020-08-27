@@ -32,11 +32,12 @@
    })
 
 (defn channel-msg-handler
-  [{:keys [name data]}]
-  (println "msg received: " name " data : " data)
-  (condp = name
+  [{:keys [event-name data] :as po}]
+  (println "msg received: " event-name " data : " data)
+
+  (condp = event-name
     :connected (println "We are connected!")
-    :subscription-initialized (println "Initialized!" data)
+    :wosh-back (println "wosh back" data)
 
     (println "no matching clause for " name)
     )
@@ -44,7 +45,9 @@
 
 (defn handle-event!
   [{:keys [name data]}]
+
   (println "HANDLE-EVENT" name " DATA - " data)
+
   (condp = name
     :page-selected (swap! app-state-atom (fn [state]
                                            (-> (assoc state :active-page (:page data))
@@ -63,6 +66,7 @@
 
     :channel-initialized (swap! channel-atom assoc :channel (:channel data))
     :channel-received-msg (channel-msg-handler data)
+
     :send-msg (send-msg! (:channel (deref channel-atom)) (assoc data :id (:id (deref channel-atom))))
 
     ; ha... this actually returns something

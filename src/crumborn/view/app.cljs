@@ -29,10 +29,10 @@
                     :align-self     "center"
                     :margin-right   "20px"}}
       [:span {:style    {:cursor "pointer"}
-              :on-click (fn [] (gql-query {:mutation [:vote :UP :id 1337]}))}
+              :on-click (fn [] (trigger-event {:name :send-msg :data {:event-name :wosh :data {:hey-bro-up 123}}}))}
        "▲"]
       [:span {:style    {:cursor "pointer"}
-              :on-click (fn [] (gql-query {:mutation [:vote :DOWN :id 1337]}))} "▼"]
+              :on-click (fn [] (trigger-event {:name :send-msg :data {:event-name :wosh :data {:hey-bro-down 2222}}}))} "▼"]
       ]
      [:h2 {:style {:margin-right "20px"}}
       0

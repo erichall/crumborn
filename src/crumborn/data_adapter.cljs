@@ -38,6 +38,7 @@
                                                    :id    (:id data-state-atom)})
                                     }))
                 (.then (fn [args]
+                         (js/console.log "thi is the args" args)
                          (.json args)))
                 (.then (fn [data]
                          (on-success data)))
@@ -88,12 +89,9 @@
 (defn receive-msg!
   [trigger-event]
   (fn [msg]
-    (let [data (:data (cljs.reader/read-string (get-data-from-js msg)))
-          query (:query data)]
-      (swap! data-state-atom assoc-in query (:message data)) ;; TODO
-      (trigger-event
-        {:name :channel-received-msg
-         :data data}))))
+    (trigger-event
+      {:name :channel-received-msg
+       :data (edn/read-string (get-data-from-js msg))})))
 
 (defn send-msg!
   [channel msg]
