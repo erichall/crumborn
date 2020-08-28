@@ -29,19 +29,25 @@
   {:size        (interop/get-window-size)
    :active-page (:page (get-page-and-slug))
    :active-slug (:slug (get-page-and-slug))
+   :data        nil
    })
 
 (defn channel-msg-handler
-  [{:keys [event-name data] :as po}]
-  (println "msg received: " event-name " data : " data)
+  [{:keys [event-name data]}]
+  (println "msg received: " event-name " data : " (keys data))
 
   (condp = event-name
-    :connected (println "We are connected!")
+    :connected (swap! app-state-atom assoc-in [:data :state] (:state data))
+    :re-hydrate (swap! app-state-atom assoc-in [:data :state] (:state data))
     :wosh-back (println "wosh back" data)
 
     (println "no matching clause for " name)
     )
   )
+
+(defn send!
+  [channel data]
+  (send-msg! (:channel channel) (assoc data :id (:id channel))))
 
 (defn handle-event!
   [{:keys [name data]}]
@@ -67,7 +73,10 @@
     :channel-initialized (swap! channel-atom assoc :channel (:channel data))
     :channel-received-msg (channel-msg-handler data)
 
-    :send-msg (send-msg! (:channel (deref channel-atom)) (assoc data :id (:id (deref channel-atom))))
+    :send-msg (send! (deref channel-atom) data)
+    :vote-up (send! (deref channel-atom) data)
+    :vote-down (send! (deref channel-atom) data)
+
 
     ; ha... this actually returns something
     :get-channel-id (:id (deref channel-atom))

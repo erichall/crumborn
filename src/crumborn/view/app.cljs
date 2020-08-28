@@ -3,9 +3,11 @@
             [reagent.core :as r]
             [crumborn.data-adapter :refer [gql-query get-data]]))
 
-(defn front-page [{:keys [trigger-event]}]
+(defn front-page
+  [{:keys [trigger-event app-state]}]
   [:div
-   [:h1 {:style {:color (get-style [:font-color])}} "frontpage"]
+   (println " THE APP STATE " app-state)
+   [:h1 {:style {:color (get-style [:font-color])}} (get-in app-state [:data :state :content :front-page :text])]
    [:button {:on-click (fn []
                          (trigger-event {:name :toggle-theme})
                          )}
@@ -29,15 +31,22 @@
                     :align-self     "center"
                     :margin-right   "20px"}}
       [:span {:style    {:cursor "pointer"}
-              :on-click (fn [] (trigger-event {:name :send-msg :data {:event-name :wosh :data {:hey-bro-up 123}}}))}
+              :on-click (fn []
+                          (println "STATE :: " app-state)
+                          (trigger-event {:name :vote-up :data {:event-name :vote-up
+                                                                :data       {:id (get-in app-state [:data :state :posts :abcde :id])}}})
+                          )}
        "▲"]
       [:span {:style    {:cursor "pointer"}
-              :on-click (fn [] (trigger-event {:name :send-msg :data {:event-name :wosh :data {:hey-bro-down 2222}}}))} "▼"]
+              :on-click (fn []
+                          (trigger-event {:name :vote-down :data {:event-name :vote-down
+                                                                  :data       {:id (get-in app-state [:data :state :posts :abcde :id])}}})
+                          )} "▼"]
       ]
      [:h2 {:style {:margin-right "20px"}}
-      0
+      (get-in app-state [:data :state :posts :abcde :votes])
       ]
-     [:h2 "This is an awesome post"]
+     [:h2 (get-in app-state [:data :state :posts :abcde :title])]
 
      ]
     ]

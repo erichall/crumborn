@@ -89,6 +89,9 @@
 (defn receive-msg!
   [trigger-event]
   (fn [msg]
+
+    (println " MESSAGE ! " msg)
+
     (trigger-event
       {:name :channel-received-msg
        :data (edn/read-string (get-data-from-js msg))})))
