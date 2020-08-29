@@ -7,23 +7,16 @@
             [crumborn.theme :refer [theme-atom is-dark-theme? get-style]]
             [crumborn.theme.light :as light-theme]
             [crumborn.theme.dark :as dark-theme]
-            [crumborn.data-adapter :refer [set-channel-id-data-state-atom! id-is-set? make-websocket! send-msg!]]
+            [crumborn.data-adapter :refer [make-websocket! send-msg!]]
             [cljs-http.client :as http]
             [cljs.core.async :refer [<!]]
             ))
-
-;(go (let [response (<! (http/get "/api/v1/get-posts/"))]
-;      (println (:body response))))
 
 (enable-console-print!)
 
 (defonce channel-atom (atom {:channel nil
                              :id      (js/btoa (.toString (random-uuid)))}))
 (defonce app-state-atom (atom nil))
-
-;; TODO this is shit.....
-(when (not (id-is-set?))
-  (set-channel-id-data-state-atom! (:id (deref channel-atom))))
 
 (def initial-state
   {:size        (interop/get-window-size)
@@ -39,7 +32,6 @@
   (condp = event-name
     :connected (swap! app-state-atom assoc-in [:data :state] (:state data))
     :re-hydrate (swap! app-state-atom assoc-in [:data :state] (:state data))
-    :wosh-back (println "wosh back" data)
 
     (println "no matching clause for " name)
     )
@@ -76,10 +68,6 @@
     :send-msg (send! (deref channel-atom) data)
     :vote-up (send! (deref channel-atom) data)
     :vote-down (send! (deref channel-atom) data)
-
-
-    ; ha... this actually returns something
-    :get-channel-id (:id (deref channel-atom))
 
     ))
 
@@ -126,7 +114,7 @@
                (println "CHANNEL - prev " old-value " new " new-value)
                new-value
                ))
-  (make-websocket! "ws://localhost:8885/ws" handle-event!))
+  (make-websocket! "ws://localhost:8885/ws" handle-event! channel-atom))
 
 (defn on-js-reload []
   (render (deref app-state-atom)))
