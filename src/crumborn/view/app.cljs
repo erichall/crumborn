@@ -2,65 +2,77 @@
   (:require [crumborn.theme :refer [get-style is-dark-theme? theme-atom]]
             [reagent.core :as r]))
 
-(defn front-page
+(defn menu
   [{:keys [trigger-event app-state]}]
   (let [goto (fn [page] (trigger-event {:name :page-selected :data {:page page :slug nil}}))]
+    (println )
     [:div
-     [:h1 {:style {:color (get-style [:font-color])}}
-      (get-in app-state [:data :state :content :front-page :text])]
-     [:button {:on-click (fn []
-                           (trigger-event {:name :toggle-theme})
-                           )}
-      (if (is-dark-theme?)
-        "Light"
-        "Dark"
-        )
+     [:h1 {:style (get-style [:title])}
+      (get-in app-state [:data :state :content :header :title])]
+     [:h3 {:style (get-style [:subtitle])}
+      (get-in app-state [:data :state :content :header :subtitle])
       ]
-
-     [:svg {:width 100 :height 100}
-      [:path {:d "M0,50, a1, 1 0 0, 0 100 0" :fill "black"}]
-
-      ]
-
-     [:div
-      [:nav {:style (get-style [:navbar :nav])}
-
-       [:ul {:style (get-style [:navbar :ul])}
-        [:li {:on-click (fn [] (goto :front-page)) :style (get-style [:navbar :li])} "Home"]
-        [:li {:on-click (fn [] (goto :about-me)) :style (get-style [:navbar :li])} "About"]
-        [:li {:on-click (fn [] (goto :resume)) :style (get-style [:navbar :li])} "Resume"]
-        [:li {:on-click (fn [] (goto :posts)) :style (get-style [:navbar :li])} "Posts"]
-        [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li])} "Portfolio"]]
-
-       ]
-      [:div
-       {:style {:display        "flex"
-                :flex-direction "row"}}
-       [:div {:style {:display        "flex"
-                      :flex-direction "column"
-                      :align-self     "center"
-                      :margin-right   "20px"}}
-        [:span {:style    {:cursor "pointer"}
-                :on-click (fn []
-                            (trigger-event {:name :vote-up :data {:event-name :vote-up
-                                                                  :data       {:id (get-in app-state [:data :state :posts :abcde :id])}}})
-                            )}
-         "▲"]
-        [:span {:style    {:cursor "pointer"}
-                :on-click (fn []
-                            (trigger-event {:name :vote-down :data {:event-name :vote-down
-                                                                    :data       {:id (get-in app-state [:data :state :posts :abcde :id])}}})
-                            )} "▼"]
-        ]
-       [:h2 {:style {:margin-right "20px"}}
-        (get-in app-state [:data :state :posts :abcde :votes])
-        ]
-       [:h2 (get-in app-state [:data :state :posts :abcde :title])]
-
-       ]
-      ]
-     ])
+     [:nav {:style (get-style [:navbar :nav])}
+      [:ul {:style (get-style [:navbar :ul])}
+       [:li {:on-click (fn [] (goto :front-page)) :style (assoc (get-style [:navbar :li]) :margin-left "0px")} "Home"]
+       [:li {:on-click (fn [] (goto :about-me)) :style (get-style [:navbar :li])} "About"]
+       [:li {:on-click (fn [] (goto :resume)) :style (get-style [:navbar :li])} "Resume"]
+       [:li {:on-click (fn [] (goto :posts)) :style (get-style [:navbar :li])} "Posts"]
+       [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li])} "Portfolio"]
+       [:li {:on-click (fn [] (trigger-event {:name :toggle-theme}))
+             :style    (assoc (get-style [:navbar :li]) :float "right")}
+        (if (is-dark-theme?)
+          "Light"
+          "Dark"
+          )]]]
+     [:hr]]
+    )
   )
+
+(defn front-page
+  [{:keys [trigger-event app-state]}]
+  [:div
+   [:h1 {:style {:color (get-style [:font-color])}}
+    (get-in app-state [:data :state :content :front-page :text])]
+   [:button {:on-click (fn []
+                         (trigger-event {:name :toggle-theme})
+                         )}
+    (if (is-dark-theme?)
+      "Light"
+      "Dark"
+      )
+    ]
+
+   [:svg {:width 100 :height 100}
+    [:path {:d "M0,50, a1, 1 0 0, 0 100 0" :fill "black"}]
+    ]
+
+   [:div
+    {:style {:display        "flex"
+             :flex-direction "row"}}
+    [:div {:style {:display        "flex"
+                   :flex-direction "column"
+                   :align-self     "center"
+                   :margin-right   "20px"}}
+     [:span {:style    {:cursor "pointer"}
+             :on-click (fn []
+                         (trigger-event {:name :vote-up :data {:event-name :vote-up
+                                                               :data       {:id (get-in app-state [:data :state :posts :abcde :id])}}})
+                         )}
+      "▲"]
+     [:span {:style    {:cursor "pointer"}
+             :on-click (fn []
+                         (trigger-event {:name :vote-down :data {:event-name :vote-down
+                                                                 :data       {:id (get-in app-state [:data :state :posts :abcde :id])}}})
+                         )} "▼"]
+     ]
+    [:h2 {:style {:margin-right "20px"}}
+     (get-in app-state [:data :state :posts :abcde :votes])
+     ]
+    [:h2 (get-in app-state [:data :state :posts :abcde :title])]
+
+    ]
+   ])
 
 (defn resume [{:keys [trigger-event]}]
   [:div
@@ -119,7 +131,10 @@
 (defn app-component
   [{:keys [app-state trigger-event theme]}]
   [:div {:style {:height "calc(100vh - 4em - 3.4em)"}}
-   [:button {:on-click (fn [] (trigger-event {:name :page-selected :data :front-page}))} "home"]
+   ;[:button {:on-click (fn [] (trigger-event {:name :page-selected :data :front-page}))} "home"]
+   [menu {:app-state     app-state
+          :trigger-event trigger-event
+          :theme         theme}]
    [(get-page app-state) {:app-state     app-state
                           :trigger-event trigger-event
                           :theme         theme}]
