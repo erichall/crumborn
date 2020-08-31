@@ -3,13 +3,14 @@
   (:require [reagent.core :as reagent]
             [crumborn.view.app :refer [app-component]]
             [crumborn.interop :as interop]
-            [crumborn.core :refer [debounce get-page-and-slug]]
+            [crumborn.core :refer [debounce get-page-and-slug get-identitiy]]
             [crumborn.theme :refer [theme-atom is-dark-theme? get-style]]
             [crumborn.theme.light :as light-theme]
             [crumborn.theme.dark :as dark-theme]
             [crumborn.data-adapter :refer [make-websocket! send-msg!]]
             [cljs-http.client :as http]
             [cljs.core.async :refer [<!]]
+
             ))
 
 (enable-console-print!)
@@ -19,11 +20,18 @@
 (defonce app-state-atom (atom nil))
 
 (def initial-state
-  {:size        (interop/get-window-size)
-   :active-page (:page (get-page-and-slug))
-   :active-slug (:slug (get-page-and-slug))
-   :data        nil
+  {:size             (interop/get-window-size)
+   :active-page      (:page (get-page-and-slug))
+   :active-slug      (:slug (get-page-and-slug))
+   :loading          false
+   :identity         nil
+   :data             nil
+   :should-goto-page nil
    })
+
+(defn send!
+  [channel data]
+  (send-msg! (:channel channel) (assoc data :id (:id channel))))
 
 (defn channel-msg-handler
   [{:keys [event-name data]}]
@@ -33,13 +41,32 @@
     :connected (swap! app-state-atom assoc-in [:data :state] (:state data))
     :re-hydrate (swap! app-state-atom assoc-in [:data :state] (:state data))
 
+    :authenticate-success (swap! app-state-atom assoc :identity (:token data))
+    :authenticate-fail (swap! app-state-atom assoc :identity nil)
+
+    :is-authenticated (swap! app-state-atom assoc :should-goto-page (:page data))
+
     (println "no matching clause for " name)
     )
   )
 
-(defn send!
-  [channel data]
-  (send-msg! (:channel channel) (assoc data :id (:id channel))))
+
+(defn page-handler!
+  [{:keys [page slug]}]
+  (condp = page
+    :create-post (do
+                   (swap! app-state-atom assoc :loading true)
+                   (send! (deref channel-atom) {:event-name :page-selected
+                                                :data       {:page  :create-post
+                                                             :token (get-identitiy (deref app-state-atom))}})
+
+                   )
+
+    ; else
+    (swap! app-state-atom (fn [state]
+                            (-> (assoc state :active-page page)
+                                (assoc :active-slug slug)))))
+  )
 
 (defn handle-event!
   [{:keys [name data]}]
@@ -47,9 +74,7 @@
   (println "HANDLE-EVENT" name " DATA - " data)
 
   (condp = name
-    :page-selected (swap! app-state-atom (fn [state]
-                                           (-> (assoc state :active-page (:page data))
-                                               (assoc :active-slug (:slug data)))))
+    :page-selected (page-handler! data)
     :toggle-theme (do
                     (reset! theme-atom (if (is-dark-theme?) light-theme/theme dark-theme/theme))
                     (interop/set-body-style! "background-color" (get-style [:background-color])))
@@ -61,6 +86,9 @@
                             (assoc state :active-page (:page data))
                             (assoc :active-slug (:slug data)))))
 
+
+    :login (send! (deref channel-atom) {:event-name :login
+                                        :data       data})
 
     :channel-initialized (swap! channel-atom assoc :channel (:channel data))
     :channel-received-msg (channel-msg-handler data)

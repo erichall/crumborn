@@ -1,11 +1,11 @@
 (ns crumborn.view.app
   (:require [crumborn.theme :refer [get-style is-dark-theme? theme-atom]]
+            [crumborn.core :refer [authenticated?]]
             [reagent.core :as r]))
 
 (defn menu
   [{:keys [trigger-event app-state]}]
   (let [goto (fn [page] (trigger-event {:name :page-selected :data {:page page :slug nil}}))]
-    (println )
     [:div
      [:h1 {:style (get-style [:title])}
       (get-in app-state [:data :state :content :header :title])]
@@ -19,6 +19,10 @@
        [:li {:on-click (fn [] (goto :resume)) :style (get-style [:navbar :li])} "Resume"]
        [:li {:on-click (fn [] (goto :posts)) :style (get-style [:navbar :li])} "Posts"]
        [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li])} "Portfolio"]
+
+       (when (authenticated? app-state)
+         [:li {:on-click (fn [] (goto :create-post)) :style (assoc (get-style [:navbar :li]) :float "right")} "Post"])
+
        [:li {:on-click (fn [] (trigger-event {:name :toggle-theme}))
              :style    (assoc (get-style [:navbar :li]) :float "right")}
         (if (is-dark-theme?)
@@ -110,7 +114,31 @@
      ]))
 
 (defn portfolio [] [:h1 "portfolio"])
-(defn login [] [:h1 "login"])
+(defn login
+  [{:keys [trigger-event]}]
+  (let [input-atom (r/atom {:username ""
+                            :password ""})]
+    (fn []
+      [:div
+       [:h1 "login"]
+       [:input {
+                :placeholder "username"
+                :value       (:username (deref input-atom))
+                :on-change   (fn [e] (swap! input-atom assoc-in [:username] (aget e "target" "value")))
+                }]
+       [:br]
+       [:input {
+                :placeholder "password"
+                :type        "password"
+                :value       (:password (deref input-atom))
+                :on-change   (fn [e] (swap! input-atom assoc-in [:password] (aget e "target" "value")))
+                }]
+       [:br]
+       [:button {:on-click (fn []
+                             (trigger-event {:name :login :data (deref input-atom)})
+                             )} "Login"]
+
+       ])))
 (defn create-post [] [:h1 "create-post"])
 
 (defn get-page
