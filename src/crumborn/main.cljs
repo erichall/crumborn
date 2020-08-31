@@ -20,13 +20,12 @@
 (defonce app-state-atom (atom nil))
 
 (def initial-state
-  {:size             (interop/get-window-size)
-   :active-page      (:page (get-page-and-slug))
-   :active-slug      (:slug (get-page-and-slug))
-   :loading          false
-   :identity         nil
-   :data             nil
-   :should-goto-page nil
+  {:size        (interop/get-window-size)
+   :active-page (:page (get-page-and-slug))
+   :active-slug (:slug (get-page-and-slug))
+   :loading     false
+   :identity    nil
+   :data        nil
    })
 
 (defn send!
@@ -44,7 +43,7 @@
     :authenticate-success (swap! app-state-atom assoc :identity (:token data))
     :authenticate-fail (swap! app-state-atom assoc :identity nil)
 
-    :is-authenticated (swap! app-state-atom assoc :should-goto-page (:page data))
+    :is-authenticated (swap! app-state-atom assoc :active-page (:page data))
 
     (println "no matching clause for " name)
     )
@@ -59,7 +58,6 @@
                    (send! (deref channel-atom) {:event-name :page-selected
                                                 :data       {:page  :create-post
                                                              :token (get-identitiy (deref app-state-atom))}})
-
                    )
 
     ; else
