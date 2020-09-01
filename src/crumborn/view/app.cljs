@@ -1,6 +1,6 @@
 (ns crumborn.view.app
   (:require [crumborn.theme :refer [get-style is-dark-theme? theme-atom]]
-            [crumborn.core :refer [authenticated?]]
+            [crumborn.core :refer [authenticated? loading?]]
             [reagent.core :as r]))
 
 (defn menu
@@ -159,14 +159,12 @@
 (defn app-component
   [{:keys [app-state trigger-event theme]}]
   [:div {:style {:height "calc(100vh - 4em - 3.4em)"}}
-
-   (println (:loading app-state))
-   [:h1 (:loading app-state)]
-
-   [menu {:app-state     app-state
-          :trigger-event trigger-event
-          :theme         theme}]
-   [(get-page app-state) {:app-state     app-state
-                          :trigger-event trigger-event
-                          :theme         theme}]
-   ])
+   (if (loading? app-state)
+     [:h1 "Spinning"]
+     [:<>
+      [menu {:app-state     app-state
+             :trigger-event trigger-event
+             :theme         theme}]
+      [(get-page app-state) {:app-state     app-state
+                             :trigger-event trigger-event
+                             :theme         theme}]])])

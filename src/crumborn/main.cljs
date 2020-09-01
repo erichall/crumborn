@@ -49,7 +49,9 @@
                                                (-> (assoc state :identity nil)
                                                    (assoc :loading false))))
 
-    :is-authenticated (swap! app-state-atom assoc :active-page (:page data))
+    :is-authenticated (swap! app-state-atom (fn [state]
+                                              (-> (assoc state :active-page (:page data))
+                                                  (assoc :loading false))))
 
     (println "no matching clause for " name)
     )

@@ -16,6 +16,7 @@
       :slug slug}))
   ([]
    (get-page-and-slug (clj->js {:target (interop/get-window)}))))
+
 (defn get-identitiy
   [state]
   (:identity state))
@@ -23,4 +24,8 @@
 (defn authenticated?
   [state]
   (-> (get-identitiy state) some?))
+
+(defn loading?
+  [state]
+  (:loading state))
 
