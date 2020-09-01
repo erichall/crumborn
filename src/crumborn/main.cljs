@@ -23,7 +23,7 @@
   {:size        (interop/get-window-size)
    :active-page (:page (get-page-and-slug))
    :active-slug (:slug (get-page-and-slug))
-   :loading     false
+   :loading     true
    :identity    nil
    :data        nil
    })
@@ -37,11 +37,17 @@
   (println "msg received: " event-name " data : " (keys data))
 
   (condp = event-name
-    :connected (swap! app-state-atom assoc-in [:data :state] (:state data))
+    :connected (swap! app-state-atom (fn [state]
+                                       (-> (assoc-in state [:data :state] (:state data))
+                                           (assoc :loading false))))
     :re-hydrate (swap! app-state-atom assoc-in [:data :state] (:state data))
 
-    :authenticate-success (swap! app-state-atom assoc :identity (:token data))
-    :authenticate-fail (swap! app-state-atom assoc :identity nil)
+    :authenticate-success (swap! app-state-atom (fn [state]
+                                                  (-> (assoc state :identity (:token data))
+                                                      (assoc :loading false))))
+    :authenticate-fail (swap! app-state-atom (fn [state]
+                                               (-> (assoc state :identity nil)
+                                                   (assoc :loading false))))
 
     :is-authenticated (swap! app-state-atom assoc :active-page (:page data))
 
@@ -49,9 +55,17 @@
     )
   )
 
+(defn set-hash!
+  [loc]
+  (set! (.-hash js/window.location) loc))
 
 (defn page-handler!
   [{:keys [page slug]}]
+
+  (if (some? slug)
+    (set-hash! (str "/posts/" (name slug)))
+    (set-hash! (name page)))
+
   (condp = page
     :create-post (do
                    (swap! app-state-atom assoc :loading true)
@@ -78,11 +92,14 @@
                     (interop/set-body-style! "background-color" (get-style [:background-color])))
 
     :resize (swap! app-state-atom assoc :size data)
-    :hash-change (swap! app-state-atom
-                        (fn [state]
-                          (->
-                            (assoc state :active-page (:page data))
-                            (assoc :active-slug (:slug data)))))
+    :hash-change (do
+                   (swap! app-state-atom
+                          (fn [state]
+                            (->
+                              (assoc state :active-page (:page data))
+                              (assoc :active-slug (:slug data))
+                              )
+                            )))
 
 
     :login (send! (deref channel-atom) {:event-name :login
@@ -96,6 +113,8 @@
     :vote-down (send! (deref channel-atom) data)
 
     ))
+
+
 
 (interop/setup-listener! "resize"
                          (fn []

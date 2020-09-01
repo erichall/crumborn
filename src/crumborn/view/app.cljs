@@ -159,7 +159,10 @@
 (defn app-component
   [{:keys [app-state trigger-event theme]}]
   [:div {:style {:height "calc(100vh - 4em - 3.4em)"}}
-   ;[:button {:on-click (fn [] (trigger-event {:name :page-selected :data :front-page}))} "home"]
+
+   (println (:loading app-state))
+   [:h1 (:loading app-state)]
+
    [menu {:app-state     app-state
           :trigger-event trigger-event
           :theme         theme}]
