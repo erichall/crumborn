@@ -1,31 +1,65 @@
 (ns crumborn.main
-  (:require-macros [cljs.core.async.macros :refer [go]])
+  (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require [reagent.core :as reagent]
             [crumborn.view.app :refer [app-component]]
             [crumborn.interop :as interop]
-            [crumborn.core :refer [debounce get-page-and-slug get-identitiy]]
+            [crumborn.core :refer [debounce get-page-and-slug get-identitiy page-is-create-post? should-authenticate?]]
             [crumborn.theme :refer [theme-atom is-dark-theme? get-style]]
             [crumborn.theme.light :as light-theme]
             [crumborn.theme.dark :as dark-theme]
             [crumborn.data-adapter :refer [make-websocket! send-msg!]]
             [cljs-http.client :as http]
-            [cljs.core.async :refer [<!]]
-
+            [cljs.core.async :refer [<! >! chan go-loop pub sub put!]]
             ))
 
 (enable-console-print!)
+
+(def pub-channel (chan 1))
+(def publisher (pub pub-channel :tag))
+(def print-channel (chan 1))
+
+(defn subscribe
+  [publisher subscriber tags callback]
+  (let [channel (chan 1)]
+    (doseq [tag tags]
+      (sub publisher tag channel))
+    (go-loop []
+             (when-let [value (<! channel)]
+               (>! print-channel (callback subscriber tags value))
+               (recur)))))
+
+(defn publish-message
+  [channel msg]
+  (doseq [tag (:tags msg)]
+    (println "Sending..... " tag)
+    ;; Put data on channel
+    (put! channel {:tag tag
+                   :msg (:msg msg)})))
+
+(defn this-will-happen-when-someone-post-message-with-the-tag-the-tag-i-care-about
+  [subscriber tags data]
+  (println "This is the subscriber, someone published a message"
+           data " with the tags "
+           tags))
+
+
+;; OK I subscribe to this,
+(subscribe publisher "This subscriber cares about a speific tag!!"
+           [:the-tag-i-care-about]
+           this-will-happen-when-someone-post-message-with-the-tag-the-tag-i-care-about)
 
 (defonce channel-atom (atom {:channel nil
                              :id      (js/btoa (.toString (random-uuid)))}))
 (defonce app-state-atom (atom nil))
 
 (def initial-state
-  {:size        (interop/get-window-size)
-   :active-page (:page (get-page-and-slug))
-   :active-slug (:slug (get-page-and-slug))
-   :loading     true
-   :identity    nil
-   :data        nil
+  {:size                (interop/get-window-size)
+   :should-authenticate (page-is-create-post?)
+   :active-page         nil                                 ;(:page (get-page-and-slug))
+   :active-slug         nil                                 ;(:slug (get-page-and-slug))
+   :loading             true
+   :identity            nil
+   :data                nil
    })
 
 (defn send!
@@ -53,24 +87,25 @@
                                               (-> (assoc state :active-page (:page data))
                                                   (assoc :loading false))))
 
-    (println "no matching clause for " name)
+
+    (println "no matching clause for " event-name)
     )
   )
-
-(defn set-hash!
-  [loc]
-  (set! (.-hash js/window.location) loc))
 
 (defn page-handler!
   [{:keys [page slug]}]
 
+  (println " IM NOT CALLED ON LOAD !!!!!!!!")
+
   (if (some? slug)
-    (set-hash! (str "/posts/" (name slug)))
-    (set-hash! (name page)))
+    (interop/set-hash! (str "/posts/" (name slug)))
+    (interop/set-hash! (name page)))
 
   (condp = page
     :create-post (do
-                   (swap! app-state-atom assoc :loading true)
+                   (swap! app-state-atom (fn [state]
+                                           (-> (assoc state :loading true)
+                                               (assoc :should-authenticate false))))
                    (send! (deref channel-atom) {:event-name :page-selected
                                                 :data       {:page  :create-post
                                                              :token (get-identitiy (deref app-state-atom))}})
@@ -104,6 +139,8 @@
                             )))
 
 
+    :publish-message (publish-message pub-channel {:msg data :tags [:the-tag-i-care-about]})
+
     :login (send! (deref channel-atom) {:event-name :login
                                         :data       data})
 
@@ -116,7 +153,17 @@
 
     ))
 
+(defn app
+  [app-state]
+  [app-component {:app-state     app-state
+                  :trigger-event handle-event!
+                  }])
+(defn render
+  [app-state]
+  (reagent/render-component [#'app app-state] (interop/get-element-by-id "app")))
 
+(defn on-js-reload []
+  (render (deref app-state-atom)))
 
 (interop/setup-listener! "resize"
                          (fn []
@@ -129,15 +176,6 @@
                              (handle-event! {:name :hash-change
                                              :data {:page page
                                                     :slug slug}}))))
-
-(defn app
-  [app-state]
-  [app-component {:app-state     app-state
-                  :trigger-event handle-event!
-                  }])
-(defn render
-  [app-state]
-  (reagent/render-component [#'app app-state] (interop/get-element-by-id "app")))
 
 (when (nil? (deref app-state-atom))
   (add-watch app-state-atom
@@ -163,5 +201,4 @@
                ))
   (make-websocket! "ws://localhost:8885/ws" handle-event! channel-atom))
 
-(defn on-js-reload []
-  (render (deref app-state-atom)))
+

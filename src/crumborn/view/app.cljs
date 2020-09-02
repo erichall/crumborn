@@ -75,6 +75,10 @@
      ]
     [:h2 (get-in app-state [:data :state :posts :abcde :title])]
 
+    [:button {:on-click (fn []
+                          (trigger-event {:name :publish-message :data {:thisis "the-data"}})
+                          )} "Publish!"]
+
     ]
    ])
 
@@ -139,7 +143,16 @@
                              )} "Login"]
 
        ])))
-(defn create-post [] [:h1 "create-post"])
+(defn create-post
+  [{:keys [app-state trigger-event]}]
+  (if (not (authenticated? app-state))
+    (do
+      [:h2 "Unauthorized - 403"]
+      (trigger-event {:name :page-selected :data {:page :front-page}})
+      )
+    [:h1 "create-post"]
+    )
+  )
 
 (defn get-page
   [{:keys [active-page]}]

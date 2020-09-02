@@ -29,3 +29,11 @@
   [state]
   (:loading state))
 
+(defn page-is-create-post?
+  []
+  (= :create-post (:page (get-page-and-slug))))
+
+(defn should-authenticate?
+  [state]
+  (:should-authenticate state))
+

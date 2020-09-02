@@ -29,3 +29,7 @@
 (defn set-body-style!
   [key value]
   (aset js/document.body.style key value))
+
+(defn set-hash!
+  [loc]
+  (set! (.-hash js/window.location) loc))

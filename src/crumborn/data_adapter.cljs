@@ -1,6 +1,8 @@
 (ns crumborn.data-adapter
+  (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require [reagent.ratom :as ratom]
             [clojure.spec.alpha :as s]
+            [cljs.core.async :refer [<! >! chan go-loop pub]]
             [clojure.edn :as edn]))
 
 (defn clj->json
@@ -52,5 +54,8 @@
       (do
         (set! (.-onmessage chan) (receive-msg trigger-event))
         (trigger-event {:name :channel-initialized :data {:channel chan}})
-        (js/console.log " Websocket established"))
+
+        (js/console.log " Websocket established")
+
+        )
       (throw (js/Error. " Unable to establish websocket ")))))
