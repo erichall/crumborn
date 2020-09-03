@@ -33,7 +33,15 @@
   []
   (= :create-post (:page (get-page-and-slug))))
 
-(defn should-authenticate?
-  [state]
-  (:should-authenticate state))
+(defn get-uuid
+  []
+  (js/btoa (.toString (random-uuid))))
+
+(defn get-ready-state [channel] (aget channel "readyState"))
+(defn- ready-state [channel n] (= (get-ready-state channel) n))
+
+(defn socket-is-connecting? [channel] (ready-state channel 0))
+(defn socket-is-open? [channel] (ready-state channel 1))
+(defn socket-is-closing? [channel] (ready-state channel 2))
+(defn socket-is-closed? [channel] (ready-state channel 3))
 

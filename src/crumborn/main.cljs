@@ -3,7 +3,12 @@
   (:require [reagent.core :as reagent]
             [crumborn.view.app :refer [app-component]]
             [crumborn.interop :as interop]
-            [crumborn.core :refer [debounce get-page-and-slug get-identitiy page-is-create-post? should-authenticate?]]
+            [crumborn.core :refer [debounce
+                                   get-page-and-slug
+                                   get-identitiy
+                                   page-is-create-post?
+                                   get-uuid
+                                   get-ready-state]]
             [crumborn.theme :refer [theme-atom is-dark-theme? get-style]]
             [crumborn.theme.light :as light-theme]
             [crumborn.theme.dark :as dark-theme]
@@ -14,66 +19,59 @@
 
 (enable-console-print!)
 
-(def pub-channel (chan 1))
-(def publisher (pub pub-channel :tag))
-(def print-channel (chan 1))
-
-(defn subscribe
-  [publisher subscriber tags callback]
-  (let [channel (chan 1)]
-    (doseq [tag tags]
-      (sub publisher tag channel))
-    (go-loop []
-             (when-let [value (<! channel)]
-               (>! print-channel (callback subscriber tags value))
-               (recur)))))
-
-(defn publish-message
-  [channel msg]
-  (doseq [tag (:tags msg)]
-    (println "Sending..... " tag)
-    ;; Put data on channel
-    (put! channel {:tag tag
-                   :msg (:msg msg)})))
-
-(defn this-will-happen-when-someone-post-message-with-the-tag-the-tag-i-care-about
-  [subscriber tags data]
-  (println "This is the subscriber, someone published a message"
-           data " with the tags "
-           tags))
-
-
-;; OK I subscribe to this,
-(subscribe publisher "This subscriber cares about a speific tag!!"
-           [:the-tag-i-care-about]
-           this-will-happen-when-someone-post-message-with-the-tag-the-tag-i-care-about)
+(def message-channel (chan))
 
 (defonce channel-atom (atom {:channel nil
-                             :id      (js/btoa (.toString (random-uuid)))}))
+                             :id      (get-uuid)}))
 (defonce app-state-atom (atom nil))
 
 (def initial-state
-  {:size                (interop/get-window-size)
-   :should-authenticate (page-is-create-post?)
-   :active-page         nil                                 ;(:page (get-page-and-slug))
-   :active-slug         nil                                 ;(:slug (get-page-and-slug))
-   :loading             true
-   :identity            nil
-   :data                nil
+  {:size        (interop/get-window-size)
+   :active-page (:page (get-page-and-slug))
+   :active-slug (:slug (get-page-and-slug))
+   :loading     true
+   :identity    nil
+   :data        nil
    })
 
 (defn send!
   [channel data]
-  (send-msg! (:channel channel) (assoc data :id (:id channel))))
+  (send-msg! (:channel channel) (assoc data :id (:id channel)))
+  )
+
+(defn publish-message
+  [message]
+  (go (>! message-channel message)))
+
+(if (page-is-create-post?)
+  (publish-message
+    {:event-name :page-selected
+     :data       {:page  :create-post
+                  :token (get-identitiy (deref app-state-atom))}}))
+
+(defn subscribe
+  [channel]
+  (go-loop []
+           (let [data (<! channel)]
+             (println "READY STATE -- " (get-ready-state (:channel (deref channel-atom))))
+             (println "Sending........" data)
+
+             (send-msg! (:channel (deref channel-atom)) (assoc data :id (:id (deref channel-atom))))
+
+             (recur))))
 
 (defn channel-msg-handler
   [{:keys [event-name data]}]
   (println "msg received: " event-name " data : " (keys data))
 
   (condp = event-name
-    :connected (swap! app-state-atom (fn [state]
-                                       (-> (assoc-in state [:data :state] (:state data))
-                                           (assoc :loading false))))
+    :connected (do
+                 (swap! app-state-atom (fn [state]
+                                         (-> (assoc-in state [:data :state] (:state data))
+                                             (assoc :loading false))))
+
+                 (subscribe message-channel))
+
     :re-hydrate (swap! app-state-atom assoc-in [:data :state] (:state data))
 
     :authenticate-success (swap! app-state-atom (fn [state]
@@ -87,6 +85,11 @@
                                               (-> (assoc state :active-page (:page data))
                                                   (assoc :loading false))))
 
+    :not-authenticated (swap! app-state-atom (fn [state]
+                                               (-> (assoc state :active-page :unauthorized)
+                                                   (assoc state :active-slug nil)
+                                                   (assoc state :token nil)
+                                                   (assoc state :loading false))))
 
     (println "no matching clause for " event-name)
     )
@@ -95,20 +98,16 @@
 (defn page-handler!
   [{:keys [page slug]}]
 
-  (println " IM NOT CALLED ON LOAD !!!!!!!!")
-
   (if (some? slug)
     (interop/set-hash! (str "/posts/" (name slug)))
     (interop/set-hash! (name page)))
 
   (condp = page
     :create-post (do
-                   (swap! app-state-atom (fn [state]
-                                           (-> (assoc state :loading true)
-                                               (assoc :should-authenticate false))))
-                   (send! (deref channel-atom) {:event-name :page-selected
-                                                :data       {:page  :create-post
-                                                             :token (get-identitiy (deref app-state-atom))}})
+                   (swap! app-state-atom assoc :loading true)
+                   (publish-message {:event-name :page-selected
+                                     :data       {:page  :create-post
+                                                  :token (get-identitiy (deref app-state-atom))}})
                    )
 
     ; else
@@ -134,22 +133,20 @@
                           (fn [state]
                             (->
                               (assoc state :active-page (:page data))
-                              (assoc :active-slug (:slug data))
-                              )
-                            )))
+                              (assoc :active-slug (:slug data))))))
 
 
-    :publish-message (publish-message pub-channel {:msg data :tags [:the-tag-i-care-about]})
+    :publish-message (publish-message data)
 
-    :login (send! (deref channel-atom) {:event-name :login
-                                        :data       data})
+    :login (publish-message {:event-name :login
+                             :data       data})
+
 
     :channel-initialized (swap! channel-atom assoc :channel (:channel data))
     :channel-received-msg (channel-msg-handler data)
 
-    :send-msg (send! (deref channel-atom) data)
-    :vote-up (send! (deref channel-atom) data)
-    :vote-down (send! (deref channel-atom) data)
+    :vote-up (publish-message data)
+    :vote-down (publish-message data)
 
     ))
 

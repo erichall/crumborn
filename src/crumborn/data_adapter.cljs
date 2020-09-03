@@ -1,6 +1,7 @@
 (ns crumborn.data-adapter
   (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require [reagent.ratom :as ratom]
+            [crumborn.core :refer [socket-is-open?]]
             [clojure.spec.alpha :as s]
             [cljs.core.async :refer [<! >! chan go-loop pub]]
             [clojure.edn :as edn]))
@@ -29,8 +30,6 @@
   (some? (-> (get-in data-state query)
              :error)))
 
-(defn get-ready-state [channel] (aget channel "readyState"))
-(defn socket-is-open? [channel] (= (get-ready-state channel) 1))
 (defn get-data-from-js [js-msg] (.-data js-msg))
 
 (defn receive-msg
@@ -46,13 +45,21 @@
     (.send channel msg)
     (throw (js/Error. "Socket is not open"))))
 
+(defn on-open [] (println "Open!"))
+(defn on-close [] (println "Close!"))
+(defn on-error [] (println "Error!"))
+
 (defn make-websocket!
   "Create a websocket to url with an identifier for the channel in the query-string"
   [url trigger-event channel-atom]
   (let [channel-id (:id (deref channel-atom))]
     (if-let [chan (js/WebSocket. (str url "?id=" channel-id))]
       (do
+        (js/console.log chan)
         (set! (.-onmessage chan) (receive-msg trigger-event))
+        (set! (.-onopen chan) (on-open))
+        (set! (.-onclose chan) (on-close))
+        (set! (.-onerror chan) (on-error))
         (trigger-event {:name :channel-initialized :data {:channel chan}})
 
         (js/console.log " Websocket established")

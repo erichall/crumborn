@@ -143,16 +143,15 @@
                              )} "Login"]
 
        ])))
+
 (defn create-post
   [{:keys [app-state trigger-event]}]
-  (if (not (authenticated? app-state))
-    (do
-      [:h2 "Unauthorized - 403"]
-      (trigger-event {:name :page-selected :data {:page :front-page}})
-      )
-    [:h1 "create-post"]
-    )
+  [:h1 "create-post"]
   )
+
+(defn unauthorized
+  [{:keys [app-state trigger-event]}]
+  [:h2 "Unauthorized - 403"])
 
 (defn get-page
   [{:keys [active-page]}]
@@ -165,6 +164,7 @@
     :portfolio portfolio
     :login login
     :create-post create-post
+    :unauthorized unauthorized
 
     ; default
     front-page))
