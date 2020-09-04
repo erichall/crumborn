@@ -60,6 +60,7 @@
         (set! (.-onopen chan) (on-open))
         (set! (.-onclose chan) (on-close))
         (set! (.-onerror chan) (on-error))
+
         (trigger-event {:name :channel-initialized :data {:channel chan}})
 
         (js/console.log " Websocket established")

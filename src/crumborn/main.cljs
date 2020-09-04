@@ -8,6 +8,8 @@
                                    get-identitiy
                                    page-is-create-post?
                                    get-uuid
+                                   socket-is-closing?
+                                   socket-is-closed?
                                    get-ready-state]]
             [crumborn.theme :refer [theme-atom is-dark-theme? get-style]]
             [crumborn.theme.light :as light-theme]

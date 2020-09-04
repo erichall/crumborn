@@ -38,7 +38,9 @@
   (js/btoa (.toString (random-uuid))))
 
 (defn get-ready-state [channel] (aget channel "readyState"))
-(defn- ready-state [channel n] (= (get-ready-state channel) n))
+(defn- ready-state [channel n]
+  (println "EEEEE" (get-ready-state channel) n " and " (= (get-ready-state channel) n))
+  (= (get-ready-state channel) n))
 
 (defn socket-is-connecting? [channel] (ready-state channel 0))
 (defn socket-is-open? [channel] (ready-state channel 1))
