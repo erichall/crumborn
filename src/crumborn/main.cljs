@@ -10,6 +10,7 @@
                                    get-uuid
                                    socket-is-closing?
                                    socket-is-closed?
+                                   socket-is-connecting?
                                    get-ready-state]]
             [crumborn.theme :refer [theme-atom is-dark-theme? get-style]]
             [crumborn.theme.light :as light-theme]
@@ -54,13 +55,34 @@
 (defn subscribe
   [channel]
   (go-loop []
-           (let [data (<! channel)]
-             (println "READY STATE -- " (get-ready-state (:channel (deref channel-atom))))
+           ;; This blocks until something is put on the channel!!
+           (let [data (<! channel)
+                 socket (:channel (deref channel-atom))]
+             (println "READY STATE -- " (get-ready-state socket))
              (println "Sending........" data)
 
-             (send-msg! (:channel (deref channel-atom)) (assoc data :id (:id (deref channel-atom))))
+             (cond
+               (or (socket-is-closed? socket) (socket-is-closing? socket))
+               (do
+                 (crumborn.main/handle-event! {:name :reconnect})
+                 (publish-message data)                     ;; put the data back lol?
+                 )
 
-             (recur))))
+               (socket-is-connecting? socket)
+               (do
+                 (println "We are connecting...")
+                 (publish-message data)                     ;; put the data back lol?
+                 )
+
+               :else
+               (do
+                 (send-msg! (:channel (deref channel-atom)) (assoc data :id (:id (deref channel-atom))))
+                 (recur)
+                 )
+
+               )
+
+             )))
 
 (defn channel-msg-handler
   [{:keys [event-name data]}]
@@ -150,6 +172,8 @@
     :vote-up (publish-message data)
     :vote-down (publish-message data)
 
+    :reconnect (make-websocket! "ws://localhost:8885/ws" handle-event! channel-atom)
+
     ))
 
 (defn app
@@ -198,6 +222,7 @@
                (println "CHANNEL - prev " old-value " new " new-value)
                new-value
                ))
-  (make-websocket! "ws://localhost:8885/ws" handle-event! channel-atom))
+  (make-websocket! "ws://localhost:8885/ws" handle-event! channel-atom)
+  )
 
 
