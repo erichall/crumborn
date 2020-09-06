@@ -58,30 +58,22 @@
            ;; This blocks until something is put on the channel!!
            (let [data (<! channel)
                  socket (:channel (deref channel-atom))]
-             (println "READY STATE -- " (get-ready-state socket))
              (println "Sending........" data)
 
              (cond
                (or (socket-is-closed? socket) (socket-is-closing? socket))
                (do
-                 (crumborn.main/handle-event! {:name :reconnect})
-                 (publish-message data)                     ;; put the data back lol?
-                 )
+                 (crumborn.main/handle-event! {:name :reconnect}) ;; I guess this will be messed up if the server goes down
+                 (publish-message data))                    ;; put the data back lol?
 
                (socket-is-connecting? socket)
-               (do
-                 (println "We are connecting...")
-                 (publish-message data)                     ;; put the data back lol?
-                 )
+               (publish-message data)                       ;; put the data back lol?
 
                :else
                (do
                  (send-msg! (:channel (deref channel-atom)) (assoc data :id (:id (deref channel-atom))))
                  (recur)
-                 )
-
-               )
-
+                 ))
              )))
 
 (defn channel-msg-handler
@@ -111,9 +103,9 @@
 
     :not-authenticated (swap! app-state-atom (fn [state]
                                                (-> (assoc state :active-page :unauthorized)
-                                                   (assoc state :active-slug nil)
-                                                   (assoc state :token nil)
-                                                   (assoc state :loading false))))
+                                                   (assoc :active-slug nil)
+                                                   (assoc :token nil)
+                                                   (assoc :loading false))))
 
     (println "no matching clause for " event-name)
     )
@@ -146,18 +138,13 @@
   (println "HANDLE-EVENT" name " DATA - " data)
 
   (condp = name
+    :hash-change (page-handler! data)
     :page-selected (page-handler! data)
     :toggle-theme (do
                     (reset! theme-atom (if (is-dark-theme?) light-theme/theme dark-theme/theme))
                     (interop/set-body-style! "background-color" (get-style [:background-color])))
 
     :resize (swap! app-state-atom assoc :size data)
-    :hash-change (do
-                   (swap! app-state-atom
-                          (fn [state]
-                            (->
-                              (assoc state :active-page (:page data))
-                              (assoc :active-slug (:slug data))))))
 
 
     :publish-message (publish-message data)
