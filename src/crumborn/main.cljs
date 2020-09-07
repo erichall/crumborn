@@ -107,6 +107,8 @@
                                                    (assoc :token nil)
                                                    (assoc :loading false))))
 
+    :ping (publish-message {:event-name :pong})
+
     (println "no matching clause for " event-name)
     )
   )
@@ -146,7 +148,6 @@
 
     :resize (swap! app-state-atom assoc :size data)
 
-
     :publish-message (publish-message data)
 
     :login (publish-message {:event-name :login
@@ -159,7 +160,10 @@
     :vote-up (publish-message data)
     :vote-down (publish-message data)
 
-    :reconnect (make-websocket! "ws://localhost:8885/ws" handle-event! channel-atom)
+    :reconnect (do
+                 (reset! channel-atom {:channel nil
+                                       :id      (get-uuid)})
+                 (make-websocket! "ws://localhost:8885/ws" handle-event! (deref channel-atom)))
 
     ))
 

@@ -51,8 +51,8 @@
 
 (defn make-websocket!
   "Create a websocket to url with an identifier for the channel in the query-string"
-  [url trigger-event channel-atom]
-  (let [channel-id (:id (deref channel-atom))]
+  [url trigger-event channel]
+  (let [channel-id (:id channel)]
     (if-let [chan (js/WebSocket. (str url "?id=" channel-id))]
       (do
         (js/console.log chan)
