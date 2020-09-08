@@ -22,6 +22,7 @@
 
 (enable-console-print!)
 
+(declare subscribe)
 (def message-channel (chan))
 
 (defonce channel-atom (atom {:channel nil
@@ -51,30 +52,6 @@
     {:event-name :page-selected
      :data       {:page  :create-post
                   :token (get-identitiy (deref app-state-atom))}}))
-
-(defn subscribe
-  [channel]
-  (go-loop []
-           ;; This blocks until something is put on the channel!!
-           (let [data (<! channel)
-                 socket (:channel (deref channel-atom))]
-             (println "Sending........" data)
-
-             (cond
-               (or (socket-is-closed? socket) (socket-is-closing? socket))
-               (do
-                 (crumborn.main/handle-event! {:name :reconnect}) ;; I guess this will be messed up if the server goes down
-                 (publish-message data))                    ;; put the data back lol?
-
-               (socket-is-connecting? socket)
-               (publish-message data)                       ;; put the data back lol?
-
-               :else
-               (do
-                 (send-msg! (:channel (deref channel-atom)) (assoc data :id (:id (deref channel-atom))))
-                 (recur)
-                 ))
-             )))
 
 (defn channel-msg-handler
   [{:keys [event-name data]}]
@@ -110,8 +87,7 @@
     :ping (publish-message {:event-name :pong})
 
     (println "no matching clause for " event-name)
-    )
-  )
+    ))
 
 (defn page-handler!
   [{:keys [page slug]}]
@@ -160,12 +136,39 @@
     :vote-up (publish-message data)
     :vote-down (publish-message data)
 
+    :create-post (publish-message {:event-name :create-post
+                                   :data       data})
+
     :reconnect (do
                  (reset! channel-atom {:channel nil
                                        :id      (get-uuid)})
                  (make-websocket! "ws://localhost:8885/ws" handle-event! (deref channel-atom)))
 
     ))
+
+(defn subscribe
+  [channel]
+  (go-loop []
+           ;; This blocks until something is put on the channel!!
+           (let [data (<! channel)
+                 socket (:channel (deref channel-atom))]
+             (println "Sending........" data)
+
+             (cond
+               (or (socket-is-closed? socket) (socket-is-closing? socket))
+               (do
+                 (handle-event! {:name :reconnect})         ;; I guess this will be messed up if the server goes down
+                 (publish-message data))                    ;; put the data back lol?
+
+               (socket-is-connecting? socket)
+               (publish-message data)                       ;; put the data back lol?
+
+               :else
+               (do
+                 (send-msg! (:channel (deref channel-atom)) (assoc data :id (:id (deref channel-atom))))
+                 (recur)
+                 ))
+             )))
 
 (defn app
   [app-state]

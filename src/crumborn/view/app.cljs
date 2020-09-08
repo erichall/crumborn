@@ -146,7 +146,20 @@
 
 (defn create-post
   [{:keys [app-state trigger-event]}]
-  [:h1 "create-post"]
+  (let [input-atom (r/atom "")]
+    (fn []
+      [:div
+       [:h1 "create-post"]
+       [:textarea {:value     (deref input-atom)
+                   :style     {:background-color "lightgray"
+                               :height           "350px"
+                               :width            "100%"}
+                   :on-change (fn [e] (reset! input-atom (aget e "target" "value")))}]
+
+       [:button {:on-click (fn [] (trigger-event {:name :create-post
+                                                  :data {:post-content (deref input-atom)}}))} "Create"]
+
+       ]))
   )
 
 (defn unauthorized
