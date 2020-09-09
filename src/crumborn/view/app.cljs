@@ -113,8 +113,41 @@
 (defn posts [{:keys [app-state trigger-event]}]
   (if (some? (:active-slug app-state))
     [:h1 "THE POST ----------  " (:active-slug app-state)]
-    [:div
-     [:h1 "posts"]
+    [:table
+     [:tbody
+      (map-indexed (fn [index {:keys [id points title created content]}]
+                     [:<> {:key id}
+                      [:tr {:style {:line-height 1}}
+                       [:td {:valign "center"} (str index ".")]
+                       [:td {:style {:padding "0px"}}
+                        [:div {:style {:display "flex" :flex-direction "column" :align-items "center"}}
+                         [:span {:style    {:cursor "pointer"}
+                                 :on-click (fn []
+                                             (trigger-event {:name :vote-up :data {:event-name :vote-up
+                                                                                   :data       {:id id}}})
+                                             )}
+                          "▲"]
+
+                         ]
+                        ]
+                       [:td [:span {:style {:font-size "11pt"}} title]]]
+                      [:tr {:style {:line-height 1 :padding-bottom "10px"}}
+                       [:td]
+                       [:td
+                        [:span {:style    {:cursor "pointer"}
+                                :on-click (fn []
+                                            (trigger-event {:name :vote-up :data {:event-name :vote-up
+                                                                                  :data       {:id id}}})
+                                            )}
+                         "▼"]
+                        ]
+                       [:td {:style {:font-size "9pt" :color "gray"}} (str points " Points")]]
+                      [:tr {:style {:height "10px"}}]]
+                     ) [
+                        {:points 2 :title "How is it to work as a developer" :created "2020-02-03" :content "boboo" :id "the-id"}
+                        {:points 10 :title "When consulting fails" :created "2020-04-03" :content "To be or not to be in here" :id "a-id"}
+                        {:points -20 :title "Are we there yet?" :created "2020-05-03" :content "What can we do about stuff" :id "cool-id"}
+                        ])]
      ]))
 
 (defn portfolio [] [:h1 "portfolio"])

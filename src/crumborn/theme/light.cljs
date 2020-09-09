@@ -23,4 +23,7 @@
                                :li  {:display "inline-block"
                                      :margin  "0 10px"
                                      :cursor  "pointer"}}
+            :post             {:title           {:font-size   11
+                                                 :line-height 14}
+                               :title-container {:display "flex" :flex-direction "row"}}
             })
