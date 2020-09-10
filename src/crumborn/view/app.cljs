@@ -136,18 +136,14 @@
                        [:td
                         [:span {:style    {:cursor "pointer"}
                                 :on-click (fn []
-                                            (trigger-event {:name :vote-up :data {:event-name :vote-up
+                                            (trigger-event {:name :vote-up :data {:event-name :vote-down
                                                                                   :data       {:id id}}})
                                             )}
                          "▼"]
                         ]
                        [:td {:style {:font-size "9pt" :color "gray"}} (str points " Points")]]
                       [:tr {:style {:height "10px"}}]]
-                     ) [
-                        {:points 2 :title "How is it to work as a developer" :created "2020-02-03" :content "boboo" :id "the-id"}
-                        {:points 10 :title "When consulting fails" :created "2020-04-03" :content "To be or not to be in here" :id "a-id"}
-                        {:points -20 :title "Are we there yet?" :created "2020-05-03" :content "What can we do about stuff" :id "cool-id"}
-                        ])]
+                     ) (vals (get-in app-state [:data :state :posts])))]
      ]))
 
 (defn portfolio [] [:h1 "portfolio"])
