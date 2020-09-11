@@ -113,37 +113,47 @@
 (defn posts [{:keys [app-state trigger-event]}]
   (if (some? (:active-slug app-state))
     [:h1 "THE POST ----------  " (:active-slug app-state)]
-    [:table
+    [:table {:style {:padding-top "30px"}}
      [:tbody
-      (map-indexed (fn [index {:keys [id points title created content]}]
-                     [:<> {:key id}
-                      [:tr {:style {:line-height 1}}
-                       [:td {:valign "center"} (str index ".")]
-                       [:td {:style {:padding "0px"}}
-                        [:div {:style {:display "flex" :flex-direction "column" :align-items "center"}}
-                         [:span {:style    {:cursor "pointer"}
-                                 :on-click (fn []
-                                             (trigger-event {:name :vote-up :data {:event-name :vote-up
-                                                                                   :data       {:id id}}})
-                                             )}
-                          "▲"]
+      (map (fn [{:keys [id points title created content author]}]
+             [:<> {:key id}
+              [:tr {:style {:line-height 1}}
+               [:td]
+               [:td [:h2 {:style {:margin "0px"}} title]]]
+              [:tr {:style {:line-height 1 :padding-bottom "10px"}}
+               [:td]
+               [:td {:style {:font-size "9pt" :color "gray"}}
+                [:span (str points " Points by " author)]
 
-                         ]
-                        ]
-                       [:td [:span {:style {:font-size "11pt"}} title]]]
-                      [:tr {:style {:line-height 1 :padding-bottom "10px"}}
-                       [:td]
-                       [:td
-                        [:span {:style    {:cursor "pointer"}
-                                :on-click (fn []
-                                            (trigger-event {:name :vote-up :data {:event-name :vote-down
-                                                                                  :data       {:id id}}})
-                                            )}
-                         "▼"]
-                        ]
-                       [:td {:style {:font-size "9pt" :color "gray"}} (str points " Points")]]
-                      [:tr {:style {:height "10px"}}]]
-                     ) (vals (get-in app-state [:data :state :posts])))]
+                [:span {:style {:padding-left "10px"}} " | "]
+                [:span {:style {:padding-left "10px" :padding-right "10px"}}
+                 [:span {:style    {:cursor              "pointer"
+                                    :font-size           "9pt"
+                                    :color               "gray"
+                                    :-webkit-user-select "none"
+                                    :-moz-user-select    "none"
+                                    :-ms-user-select     "none"
+                                    }
+                         :on-click (fn [] (trigger-event {:name :vote-up :data {:event-name :vote-down
+                                                                                :data       {:id id}}}))}
+                  "▼"]
+                 [:span {:style    {:cursor              "pointer"
+                                    :-webkit-user-select "none"
+                                    :-moz-user-select    "none"
+                                    :-ms-user-select     "none"
+                                    :font-size           "9pt"
+                                    :color               "gray"
+                                    }
+                         :on-click (fn []
+                                     (trigger-event {:name :vote-up :data {:event-name :vote-up
+                                                                           :data       {:id id}}}))}
+                  "▲"]]
+                [:span {:style {:padding-left "10px"}} " | "]
+                [:span {:style {:padding-left "10px"}} created]
+                ]
+               ]
+              [:tr {:style {:height "10px"}}]]
+             ) (vals (get-in app-state [:data :state :posts])))]
      ]))
 
 (defn portfolio [] [:h1 "portfolio"])
