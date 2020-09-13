@@ -119,7 +119,10 @@
              [:<> {:key id}
               [:tr {:style {:line-height 1}}
                [:td]
-               [:td [:h2 {:style {:margin "0px"}} title]]]
+               [:td [:h2 {:style    {:margin "0px"
+                                     :cursor "pointer"}
+                          :on-click (fn [] (trigger-event {:name :post-selected :data {:slug id}}))
+                          } title]]]
               [:tr {:style {:line-height 1 :padding-bottom "10px"}}
                [:td]
                [:td {:style {:font-size "9pt" :color "gray"}}
@@ -201,25 +204,36 @@
        ]))
   )
 
+(defn post
+  [{:keys [app-state]}]
+  (let [slug (:active-slug app-state)
+        post (get-in app-state [:data :posts slug])]        ;; TODO handle when we don't have the post in the state?
+    [:h1 (:title post)]
+    )
+
+  )
+
 (defn unauthorized
   [{:keys [app-state trigger-event]}]
   [:h2 "Unauthorized - 403"])
 
 (defn get-page
-  [{:keys [active-page]}]
+  [{:keys [active-page active-slug]}]
 
-  (case active-page
-    :front-page front-page
-    :resume resume
-    :about-me about-me
-    :posts posts
-    :portfolio portfolio
-    :login login
-    :create-post create-post
-    :unauthorized unauthorized
+  (if (some? active-slug)
+    post
+    (case active-page
+      :front-page front-page
+      :resume resume
+      :about-me about-me
+      :posts posts
+      :portfolio portfolio
+      :login login
+      :create-post create-post
+      :unauthorized unauthorized
 
-    ; default
-    front-page))
+      ; default
+      front-page)))
 
 (defn app-component
   [{:keys [app-state trigger-event theme]}]

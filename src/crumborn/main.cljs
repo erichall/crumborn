@@ -92,6 +92,7 @@
 (defn page-handler!
   [{:keys [page slug]}]
 
+  (println "HMM" slug)
   (if (some? slug)
     (interop/set-hash! (str "/posts/" (name slug)))
     (interop/set-hash! (name page)))
@@ -101,13 +102,13 @@
                    (swap! app-state-atom assoc :loading true)
                    (publish-message {:event-name :page-selected
                                      :data       {:page  :create-post
-                                                  :token (get-identitiy (deref app-state-atom))}})
-                   )
+                                                  :token (get-identitiy (deref app-state-atom))}}))
+
 
     ; else
     (swap! app-state-atom (fn [state]
                             (-> (assoc state :active-page page)
-                                (assoc :active-slug slug)))))
+                                (assoc :active-slug (keyword slug))))))
   )
 
 (defn handle-event!
@@ -138,6 +139,8 @@
 
     :create-post (publish-message {:event-name :create-post
                                    :data       data})
+
+    :post-selected (page-handler! data)
 
     :reconnect (do
                  (reset! channel-atom {:channel nil
