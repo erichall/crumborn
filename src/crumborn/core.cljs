@@ -13,7 +13,7 @@
                          (str/replace #"#" "")
                          (str/split #"/"))]
      {:page (if (empty? page) nil (keyword page))
-      :slug slug}))
+      :slug (if (empty? slug) nil (keyword slug))}))
   ([]
    (get-page-and-slug (clj->js {:target (interop/get-window)}))))
 

@@ -9,9 +9,9 @@
             :font-color       "white"
             :color            "white"
 
-            :title            {:color "white"}
-            :subtitle         {:margin-top "0px"
-                               :color      "white"}
+            :title            {:color  "white"
+                               :cursor "pointer"
+                               }
 
             :navbar           {:nav {:width           "100%"
                                      :display         "flex"
@@ -22,8 +22,12 @@
                                      :list-style  "none"
                                      :line-height "33px"
                                      :flex        1}
-                               :li  {:display "inline-block"
-                                     :margin  "0 10px"
-                                     :color   "white"
-                                     :cursor  "pointer"}}
+                               :li  {:display             "inline-block"
+                                     :margin              "0 10px"
+                                     :color               "white"
+                                     :cursor              "pointer"
+                                     :-webkit-user-select "none"
+                                     :-moz-user-select    "none"
+                                     :-ms-user-select     "none"
+                                     }}
             })

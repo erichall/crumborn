@@ -8,9 +8,8 @@
 
             :font-color       "black"
 
-            :title            {:color "black"}
-            :subtitle         {:margin-top "0px"
-                               :color      "black"}
+            :title            {:color  "black"
+                               :cursor "pointer"}
 
             :navbar           {:nav {:width           "100%"
                                      :display         "flex"
@@ -20,9 +19,13 @@
                                      :list-style  "none"
                                      :line-height "33px"
                                      :flex        1}
-                               :li  {:display "inline-block"
-                                     :margin  "0 10px"
-                                     :cursor  "pointer"}}
+                               :li  {:display             "inline-block"
+                                     :margin              "0 10px"
+                                     :cursor              "pointer"
+                                     :-webkit-user-select "none"
+                                     :-moz-user-select    "none"
+                                     :-ms-user-select     "none"
+                                     }}
             :post             {:title           {:font-size   11
                                                  :line-height 14}
                                :title-container {:display "flex" :flex-direction "row"}}
