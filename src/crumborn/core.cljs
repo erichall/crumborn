@@ -33,6 +33,10 @@
   []
   (= :create-post (:page (get-page-and-slug))))
 
+(defn active-page-is?
+  [state page]
+  (= (:active-page state) page))
+
 (defn get-uuid
   []
   (js/btoa (.toString (random-uuid))))

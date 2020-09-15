@@ -1,11 +1,12 @@
 (ns crumborn.view.app
   (:require [crumborn.theme :refer [get-style is-dark-theme? theme-atom]]
-            [crumborn.core :refer [authenticated? loading?]]
+            [crumborn.core :refer [authenticated? loading? active-page-is?]]
             [reagent.core :as r]))
 
 (defn menu
   [{:keys [trigger-event app-state]}]
-  (let [goto (fn [page] (trigger-event {:name :page-selected :data {:page page :slug nil}}))]
+  (let [goto (fn [page] (trigger-event {:name :page-selected :data {:page page :slug nil}}))
+        highlight-style {:border-bottom "1px solid black"}]
     [:div
      [:div {:on-click (fn [] (goto :front-page))
             :style    {:cursor "pointer"}}
@@ -13,9 +14,12 @@
        (get-in app-state [:data :state :content :header :title])]]
      [:nav {:style (get-style [:navbar :nav])}
       [:ul {:style (get-style [:navbar :ul])}
-       [:li {:on-click (fn [] (goto :resume)) :style (assoc (get-style [:navbar :li]) :margin-left "0px")} "Resume"]
-       [:li {:on-click (fn [] (goto :posts)) :style (get-style [:navbar :li])} "Posts"]
-       [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li])} "Portfolio"]
+       [:li {:on-click (fn [] (goto :resume)) :style (get-style [:navbar :li] {:margin-left "0px"} (when (active-page-is? app-state :resume) highlight-style))}
+        "Resume"]
+       [:li {:on-click (fn [] (goto :posts)) :style (get-style [:navbar :li] (when (active-page-is? app-state :posts) highlight-style))}
+        "Posts"]
+       [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li] (when (active-page-is? app-state :portfolio) highlight-style))}
+        "Portfolio"]
 
        (when (authenticated? app-state)
          [:li {:on-click (fn [] (goto :create-post)) :style (assoc (get-style [:navbar :li]) :float "right")} "Post"])
@@ -26,7 +30,7 @@
           "Light"
           "Dark"
           )]]]
-     [:hr]]
+     [:hr {:style {:margin-bottom "30px"}}]]
     )
   )
 
@@ -66,55 +70,84 @@
   )
 
 (defn posts [{:keys [app-state trigger-event]}]
-  (if (some? (:active-slug app-state))
-    [:h1 "THE POST ----------  " (:active-slug app-state)]
-    [:table {:style {:padding-top "30px"}}
-     [:tbody
-      (map (fn [{:keys [id points title created content author]}]
-             [:<> {:key id}
-              [:tr {:style {:line-height 1}}
-               [:td]
-               [:td [:h2 {:style    {:margin "0px"
-                                     :cursor "pointer"}
-                          :on-click (fn [] (trigger-event {:name :post-selected :data {:slug id}}))
-                          } title]]]
-              [:tr {:style {:line-height 1 :padding-bottom "10px"}}
-               [:td]
-               [:td {:style {:font-size "9pt" :color "gray"}}
-                [:span (str points " Points by " author)]
+  [:table
+   [:tbody
+    (map (fn [{:keys [id points title created content author]}]
+           [:<> {:key id}
+            [:tr {:style {:line-height 1}}
+             [:td [:h1 {:style    {:margin "0px"
+                                   :cursor "pointer"}
+                        :on-click (fn [] (trigger-event {:name :post-selected :data {:slug id}}))
+                        } title]]]
+            [:tr {:style {:line-height 1 :padding-bottom "10px"}}
+             [:td {:style {:font-size "9pt" :color "gray"}}
+              [:span (str points " Points by " author)]
 
-                [:span {:style {:padding-left "10px"}} " | "]
-                [:span {:style {:padding-left "10px" :padding-right "10px"}}
-                 [:span {:style    {:cursor              "pointer"
-                                    :font-size           "9pt"
-                                    :color               "gray"
-                                    :-webkit-user-select "none"
-                                    :-moz-user-select    "none"
-                                    :-ms-user-select     "none"
-                                    }
-                         :on-click (fn [] (trigger-event {:name :vote-up :data {:event-name :vote-down
-                                                                                :data       {:id id}}}))}
-                  "▼"]
-                 [:span {:style    {:cursor              "pointer"
-                                    :-webkit-user-select "none"
-                                    :-moz-user-select    "none"
-                                    :-ms-user-select     "none"
-                                    :font-size           "9pt"
-                                    :color               "gray"
-                                    }
-                         :on-click (fn []
-                                     (trigger-event {:name :vote-up :data {:event-name :vote-up
-                                                                           :data       {:id id}}}))}
-                  "▲"]]
-                [:span {:style {:padding-left "10px"}} " | "]
-                [:span {:style {:padding-left "10px"}} created]
-                ]
-               ]
-              [:tr {:style {:height "10px"}}]]
-             ) (vals (get-in app-state [:data :state :posts])))]
-     ]))
+              [:span {:style {:padding-left "10px"}} " | "]
+              [:span {:style {:padding-left "10px" :padding-right "10px"}}
+               [:span {:style    {:cursor              "pointer"
+                                  :font-size           "9pt"
+                                  :color               "gray"
+                                  :-webkit-user-select "none"
+                                  :-moz-user-select    "none"
+                                  :-ms-user-select     "none"
+                                  }
+                       :on-click (fn [] (trigger-event {:name :vote-up :data {:event-name :vote-down
+                                                                              :data       {:id id}}}))}
+                "▼"]
+               [:span {:style    {:cursor              "pointer"
+                                  :-webkit-user-select "none"
+                                  :-moz-user-select    "none"
+                                  :-ms-user-select     "none"
+                                  :font-size           "9pt"
+                                  :color               "gray"
+                                  }
+                       :on-click (fn []
+                                   (trigger-event {:name :vote-up :data {:event-name :vote-up
+                                                                         :data       {:id id}}}))}
+                "▲"]]
+              [:span {:style {:padding-left "10px"}} " | "]
+              [:span {:style {:padding-left "10px"}} created]
+              ]
+             ]
+            [:tr {:style {:height "25px"}}]]
+           ) (vals (get-in app-state [:data :state :posts])))]
+   ])
 
-(defn portfolio [] [:h1 "portfolio"])
+(defn portfolio
+  [{:keys [app-state trigger-event]}]
+  [:table
+   [:tbody
+    (map (fn [{:keys [title text tech date img]}]
+           [:<>
+            [:tr {:style {:line-height 1}}
+             [:td {:col-span 2}
+              [:h1 {:style {:margin "0px"}} title]]]
+            [:tr {:style {:line-height 1}}
+             [:td
+              [:span {:style {:font-size "9pt" :color "gray" :margin-right "10px"}} date]
+              [:span {:style {:font-size "9pt" :color "gray" :margin-right "10px"}} " | "]
+              (map (fn [t] [:span {:key t :style {:font-size "9pt" :color "gray" :margin-right "5px"}} t]) tech)]
+             ]
+            [:tr
+             [:td {:col-span (if (some? img) 1 2)} text]
+             (when (some? img)
+               [:td [:img {:src img}]]
+               )
+             ]
+            [:tr {:style {:height "30px"}}]]
+           ) [
+              {:title "Cool projet" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
+              {:title "An app" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
+              {:title "Flight and Fly" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01" :img "https://picsum.photos/200"}
+              {:title "The stuff is real" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
+              {:title "Another homepage" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
+              ])
+    ]
+   ]
+
+  )
+
 (defn login
   [{:keys [trigger-event]}]
   (let [input-atom (r/atom {:username ""

@@ -5,8 +5,9 @@
 (defonce theme-atom (atom nil))
 
 (defn get-style
-  [path]
-  (get-in (deref theme-atom) path))
+  [path & extra-styles]
+  (apply merge (get-in (deref theme-atom) path)
+         extra-styles))
 
 (defn is-dark-theme?
   []
