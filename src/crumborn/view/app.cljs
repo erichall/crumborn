@@ -43,9 +43,39 @@
 
 (defn resume [{:keys [trigger-event]}]
   [:div
-   [:h1 "resume"]
-   [:button {:on-click (fn [])}
-    "mutate!"]
+   [:h1 "Interests"]
+   [:div
+    [:span "Clojure(script)"]
+    [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+    [:span {:style {:white-space "nowrap"}} "Functional Programming"]
+    [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+    [:span "Java(script)"]
+    [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+    [:span "Python"]
+    [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+    [:span "Software design and Architecture"]
+    ]
+
+   [:h1 "Education"]
+   [:table
+    [:tbody
+     [:tr
+      [:td "2017-2019"]
+      [:td
+       [:h2 "Master in Computer Science"]]
+      ]
+     [:tr
+      [:td {:col-span 2}
+       [:span {:style {:margin-right "10px"}}
+        "Royal Institute of Technology"]
+
+       [:span
+        "Major in Data Sciences, Natural Languages"]
+       ]
+      ]
+     ]
+
+    ]
    ])
 
 (defn about-me
@@ -130,16 +160,16 @@
               (map (fn [t] [:span {:key t :style {:font-size "9pt" :color "gray" :margin-right "5px"}} t]) tech)]
              ]
             [:tr
-             [:td {:col-span (if (some? img) 1 2)} text]
-             (when (some? img)
-               [:td [:img {:src img}]]
-               )
-             ]
+             [:td {:col-span 2}
+              [:p
+               [:img {:src img :style {:float "right"} :float "right"}]
+               text
+               ]]]
             [:tr {:style {:height "30px"}}]]
            ) [
               {:title "Cool projet" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
               {:title "An app" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
-              {:title "Flight and Fly" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01" :img "https://picsum.photos/200"}
+              {:title "Flight and Fly" :text "Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of \"de Finibus Bonorum et Malorum\" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, \"Lorem ipsum dolor sit amet..\", comes from a line in section 1.10.32.\n\nThe standard chunk of Lorem Ipsum used since the 1500s is reproduced below for those interested. Sections 1.10.32 and 1.10.33 from \"de Finibus Bonorum et Malorum\" by Cicero are also reproduced in their exact original form, accompanied by English versions from the 1914 translation by H. Rackham." :tech ["React" "GraphQL"] :date "2020-03-01" :img "https://picsum.photos/200"}
               {:title "The stuff is real" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
               {:title "Another homepage" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
               ])
