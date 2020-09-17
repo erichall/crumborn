@@ -43,7 +43,7 @@
 
 (defn resume [{:keys [trigger-event]}]
   [:div
-   [:h1 "Interests"]
+   [:h1 {:style {:margin 0}} "Interests"]
    [:div
     [:span "Clojure(script)"]
     [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
@@ -56,23 +56,67 @@
     [:span "Software design and Architecture"]
     ]
 
-   [:h1 "Education"]
+   [:h1 {:style {:margin-bottom 0}} "Education"]
    [:table
     [:tbody
      [:tr
-      [:td "2017-2019"]
       [:td
-       [:h2 "Master in Computer Science"]]
-      ]
+       [:h3 {:style {:margin 0 :line-height 1}} "Master in Computer Science"]]]
      [:tr
-      [:td {:col-span 2}
-       [:span {:style {:margin-right "10px"}}
-        "Royal Institute of Technology"]
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2017-2019"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Royal Institute of Technology"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Major in Data Sciences, Natural Languages"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:a {:href "#"} "Thesis"]
 
-       [:span
-        "Major in Data Sciences, Natural Languages"]
-       ]
-      ]
+       ]]
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "Exchange semester"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2018"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Univesity of Illinois Urbana Champaign"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Department of Computer Science"]]]
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "Bachelor degree in Computer Science"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2014 – 2017"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Royal Institute of Technology"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:a {:href "http://kth-primo.hosted.exlibrisgroup.com/46KTH_VU1:default_scope:TN_divakth-208477"} "Thesis"]
+       ]]
+
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "Technical Preparatory Year"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2013 - 2014"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Royal Institute of Technology"]
+       ]]
+
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "Courses part of Science in Social Work Bachelor"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2012 - 2013"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Karlstad University"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Courses: Social Work as Subject, Society Structure and Politics, Social law"]
+       ]]
+
      ]
 
     ]
