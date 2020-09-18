@@ -120,6 +120,96 @@
      ]
 
     ]
+
+   [:h1 {:style {:margin-bottom 0}} "Experience"]
+   [:table
+    [:tbody
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "TietoEvry"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2019 - Now"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Software engineer"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Stockholm"]
+       ]]
+
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "Nordnet"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2018-2019"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "React Native"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Stockholm"]
+       ]]
+
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "Digpro"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2017-2018"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Java developer"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Stockholm"]
+       ]]
+
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "Futurice"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2016-2017"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "React Native, iOS Developer"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Stockholm"]
+       ]]
+
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "ICA"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2010 - 2018"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Perishable food sales"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Stockholm"]
+       ]]
+
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "The Swedish Armed Forces"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2011 - 2018"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Part-time"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Boden"]
+       ]]
+
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "The Swedish Armed Forces"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2009 - 2010"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Military Service"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Boden"]
+       ]]
+
+     ]]
+
    ])
 
 (defn about-me
