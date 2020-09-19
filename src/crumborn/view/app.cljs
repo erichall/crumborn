@@ -208,6 +208,66 @@
        [:span "Boden"]
        ]]
 
+
+
+
+     [:h1 {:style {:margin-bottom 0}} "Other"]
+     [:table
+      [:tbody
+       [:tr
+        [:td
+         [:h3 {:style {:margin 0 :line-height 1}} "Hack Illinois"]]]
+       [:tr
+        [:td {:style {:font-size "9pt" :color "gray"}}
+         [:span "2018"]
+         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+         [:span "Univesity of Illinois"]
+         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+         [:span "Rustbridge project"]
+         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+         [:span "Rust"]
+         ]]
+
+       [:tr
+        [:td
+         [:h3 {:style {:margin 0 :line-height 1}} "Hackathon"]]]
+       [:tr
+        [:td {:style {:font-size "9pt" :color "gray"}}
+         [:span "2017"]
+         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+         [:span "Spotify - DevX"]
+         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+         [:span "Music voting service"]
+         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+         [:span "Javascript"]
+         ]]
+
+       [:tr
+        [:td
+         [:h3 {:style {:margin 0 :line-height 1}} "Hackathon"]]]
+       [:tr
+        [:td {:style {:font-size "9pt" :color "gray"}}
+         [:span "2015"]
+         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+         [:span "Spotify - Unify"]
+         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+         [:span "NFC tag service to get playlists"]
+         ]]
+
+       [:tr
+        [:td
+         [:h3 {:style {:margin 0 :line-height 1}} "KTH Reception"]]]
+       [:tr
+        [:td {:style {:font-size "9pt" :color "gray"}}
+         [:span "2015"]
+         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+         [:span "Computer Science Chapter"]
+         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+         [:span "Introduction new students to KTH Computer Science chapter"]
+         ]]
+
+       ]]
+
      ]]
 
    ])
