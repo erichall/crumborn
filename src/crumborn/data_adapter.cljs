@@ -56,6 +56,7 @@
     (if-let [chan (js/WebSocket. (str url "?id=" channel-id))]
       (do
         (js/console.log chan)
+
         (set! (.-onmessage chan) (receive-msg trigger-event))
         (set! (.-onopen chan) (on-open))
         (set! (.-onclose chan) (on-close))

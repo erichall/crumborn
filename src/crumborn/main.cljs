@@ -146,7 +146,7 @@
     :reconnect (do
                  (reset! channel-atom {:channel nil
                                        :id      (get-uuid)})
-                 (make-websocket! "ws://localhost:8885/ws" handle-event! (deref channel-atom)))
+                 (make-websocket! "wss://localhost:8885/ws" handle-event! (deref channel-atom)))
 
     ))
 
@@ -220,7 +220,7 @@
                (println "CHANNEL - prev " old-value " new " new-value)
                new-value
                ))
-  (make-websocket! "ws://localhost:8885/ws" handle-event! channel-atom)
+  (make-websocket! "wss://localhost:8885/ws" handle-event! channel-atom)
   )
 
 
