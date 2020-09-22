@@ -5,6 +5,7 @@
 
 (goog-define env "none")
 (goog-define ws-url "none")
+
 (defn get-ws-url [] ws-url)
 (defn get-env [] env)
 
