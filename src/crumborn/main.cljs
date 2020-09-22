@@ -149,7 +149,7 @@
     :reconnect (do
                  (reset! channel-atom {:channel nil
                                        :id      nil})
-                 (make-websocket! (str (get-ws-url) "/api/ws/") handle-event! (deref channel-atom)))
+                 (make-websocket! (str (get-ws-url) "/api/ws/") handle-event!))
 
     ))
 
@@ -223,7 +223,7 @@
                (println "CHANNEL - prev " old-value " new " new-value)
                new-value
                ))
-  (make-websocket! (str (get-ws-url) "/api/ws/") handle-event! channel-atom)
+  (make-websocket! (str (get-ws-url) "/api/ws/") handle-event!)
   )
 
 

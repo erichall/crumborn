@@ -45,21 +45,22 @@
     (.send channel msg)
     (throw (js/Error. "Socket is not open"))))
 
-(defn on-open [] (println "Open!"))
+(defn on-open [data channel]
+  (println "Open! the data we get is:: " data " and the channel is " channel)
+  )
 (defn on-close [] (println "Close!"))
 (defn on-error [] (println "Error!"))
 
 (defn make-websocket!
   "Create a websocket to url with an identifier for the channel in the query-string"
-  [url trigger-event channel]
+  [url trigger-event]
   (if-let [chan (js/WebSocket. url)]
     (do
-      (js/console.log chan)
 
       (set! (.-onmessage chan) (receive-msg trigger-event))
-      (set! (.-onopen chan) (on-open))
-      (set! (.-onclose chan) (on-close))
-      (set! (.-onerror chan) (on-error))
+      (set! (.-onopen chan) on-open)
+      (set! (.-onclose chan) on-close)
+      (set! (.-onerror chan) on-error)
 
       (trigger-event {:name :channel-initialized :data {:channel chan}})
 
