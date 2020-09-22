@@ -70,7 +70,7 @@
        [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
        [:span "Major in Data Sciences, Natural Languages"]
        [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-       [:a {:href "#"} "Thesis"]
+       [:a {:href "http://kth.diva-portal.org/smash/record.jsf?pid=diva2:1361475" :target "_blank"} "Thesis"]
 
        ]]
      [:tr
@@ -92,7 +92,7 @@
        [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
        [:span "Royal Institute of Technology"]
        [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-       [:a {:href "http://kth-primo.hosted.exlibrisgroup.com/46KTH_VU1:default_scope:TN_divakth-208477"} "Thesis"]
+       [:a {:href "http://kth.diva-portal.org/smash/record.jsf?pid=diva2:1106455" :target "_blank"} "Thesis"]
        ]]
 
      [:tr
@@ -209,6 +209,22 @@
    [:h1 {:style {:margin-bottom 0}} "Other"]
    [:table
     [:tbody
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "Conference paper"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2019"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Use Neural Networks to generate Swedish Folk Music."]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "KTH"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "The 16th Sound & Music Computing Conference, Malaga, Spain, 28-31 May 2019"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:a {:href "http://kth.diva-portal.org/smash/record.jsf?pid=diva2:1303669" :target "_blank"} "Paper"]
+       ]]
+
      [:tr
       [:td
        [:h3 {:style {:margin 0 :line-height 1}} "Hack Illinois"]]]
