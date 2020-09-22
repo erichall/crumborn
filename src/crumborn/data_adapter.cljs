@@ -3,6 +3,7 @@
   (:require [reagent.ratom :as ratom]
             [crumborn.core :refer [socket-is-open?]]
             [clojure.spec.alpha :as s]
+            [taoensso.timbre :as log]
             [cljs.core.async :refer [<! >! chan go-loop pub]]
             [clojure.edn :as edn]))
 
@@ -46,10 +47,9 @@
     (throw (js/Error. "Socket is not open"))))
 
 (defn on-open [data channel]
-  (println "Open! the data we get is:: " data " and the channel is " channel)
-  )
-(defn on-close [] (println "Close!"))
-(defn on-error [] (println "Error!"))
+  (log/debug "Open! the data we get is:: " data " and the channel is " channel))
+(defn on-close [] (log/debug "Close!"))
+(defn on-error [] (log/debug "Error!"))
 
 (defn make-websocket!
   "Create a websocket to url with an identifier for the channel in the query-string"
@@ -64,7 +64,7 @@
 
       (trigger-event {:name :channel-initialized :data {:channel chan}})
 
-      (js/console.log " Websocket established")
+      (log/debug " Websocket established")
 
       )
     (throw (js/Error. " Unable to establish websocket "))))

@@ -3,8 +3,13 @@
             [crumborn.interop :as interop])
   (:import [goog.async Debouncer]))
 
+(goog-define env "none")
 (goog-define ws-url "none")
 (defn get-ws-url [] ws-url)
+(defn get-env [] env)
+
+(defn is-release? [] (= (get-env) "release"))
+(defn is-dev? [] (= (get-env) "dev"))
 
 (defn debounce [f interval]
   (let [dbnc (Debouncer. f interval)]

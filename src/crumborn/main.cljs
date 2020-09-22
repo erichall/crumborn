@@ -1,6 +1,7 @@
 (ns crumborn.main
   (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require [reagent.core :as reagent]
+            [taoensso.timbre :as log]
             [crumborn.view.app :refer [app-component]]
             [crumborn.interop :as interop]
             [crumborn.core :refer [debounce
@@ -12,7 +13,8 @@
                                    socket-is-closed?
                                    socket-is-connecting?
                                    get-ready-state
-                                   get-ws-url]]
+                                   get-ws-url
+                                   is-release?]]
             [crumborn.theme :refer [theme-atom is-dark-theme? get-style]]
             [crumborn.theme.light :as light-theme]
             [crumborn.theme.dark :as dark-theme]
@@ -22,6 +24,9 @@
             ))
 
 (enable-console-print!)
+
+(when (is-release?)
+  (log/set-level! :fatal))
 
 (declare subscribe)
 (def message-channel (chan))
@@ -41,8 +46,7 @@
 
 (defn send!
   [channel data]
-  (send-msg! (:channel channel) (assoc data :id (:id channel)))
-  )
+  (send-msg! (:channel channel) (assoc data :id (:id channel))))
 
 (defn publish-message
   [message]
@@ -56,7 +60,7 @@
 
 (defn channel-msg-handler
   [{:keys [event-name data]}]
-  (println "msg received: " event-name " data : " (keys data))
+  (log/debug "msg received: " event-name " data : " (keys data))
 
   (condp = event-name
     :connected (do
@@ -89,7 +93,7 @@
 
     :ping (publish-message {:event-name :pong})
 
-    (println "no matching clause for " event-name)
+    (log/debug "no matching clause for " event-name)
     ))
 
 (defn page-handler!
@@ -118,7 +122,7 @@
 (defn handle-event!
   [{:keys [name data]}]
 
-  (println "HANDLE-EVENT" name " DATA - " data)
+  (log/debug "HANDLE-EVENT" name " DATA - " data)
 
   (condp = name
     :hash-change (page-handler! data)
@@ -159,7 +163,7 @@
            ;; This blocks until something is put on the channel!!
            (let [data (<! channel)
                  socket (:channel (deref channel-atom))]
-             (println "Sending........" data)
+             (log/debug "Sending........" data)
 
              (cond
                (or (socket-is-closed? socket) (socket-is-closing? socket))
@@ -220,9 +224,8 @@
   (add-watch channel-atom
              :channel-loop
              (fn [_ _ old-value new-value]
-               (println "CHANNEL - prev " old-value " new " new-value)
-               new-value
-               ))
+               (log/debug "CHANNEL - prev " old-value " new " new-value)
+               new-value))
   (make-websocket! (str (get-ws-url) "/api/ws/") handle-event!)
   )
 

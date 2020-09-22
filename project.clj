@@ -11,6 +11,7 @@
                  [org.clojure/core.async "0.4.500"]
                  [reagent "0.8.1"]
                  [cljs-http "0.1.46"]
+                 [com.taoensso/timbre "5.0.0"]
                  ]
 
   :plugins [[lein-figwheel "0.5.19"]
@@ -38,7 +39,8 @@
                     :output-to            "resources/public/js/compiled/crumborn.js"
                     :output-dir           "resources/public/js/compiled/out"
                     :source-map-timestamp true
-                    :closure-defines      {crumborn.core/ws-url "ws://localhost:8885"}
+                    :closure-defines      {crumborn.core/ws-url "ws://localhost:8885"
+                                           crumborn.core/env    "dev"}
                     ;; To console.log CLJS data-structures make sure you enable devtools in Chrome
                     ;; https://github.com/binaryage/cljs-devtools
                     :preloads             [devtools.preload]}}
@@ -48,7 +50,8 @@
     {:id           "min"
      :source-paths ["src"]
      :compiler     {:output-to       "resources/public/js/compiled/crumborn.js"
-                    :closure-defines {crumborn.core/ws-url "wss://erkanp.dev"}
+                    :closure-defines {crumborn.core/ws-url "wss://erkanp.dev"
+                                      crumborn.core/env    "release"}
                     :main            crumborn.main
                     :optimizations   :advanced
                     :pretty-print    false}}]}
