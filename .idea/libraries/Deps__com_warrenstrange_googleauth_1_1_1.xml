@@ -1,9 +1,0 @@
-<component name="libraryTable">
-  <library name="Deps: com.warrenstrange/googleauth:1.1.1">
-    <CLASSES>
-      <root url="jar://$MAVEN_REPOSITORY$/com/warrenstrange/googleauth/1.1.1/googleauth-1.1.1.jar!/" />
-    </CLASSES>
-    <JAVADOC />
-    <SOURCES />
-  </library>
-</component>
