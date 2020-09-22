@@ -21,7 +21,6 @@ pipeline {
             steps {
                 echo 'Deploy!'
                 sh 'cp -r /var/lib/jenkins/workspace/crumborn/resources /var/www/erkanp.dev/html/'
-
             }
         }
     }

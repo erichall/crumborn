@@ -116,10 +116,7 @@
        [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
        [:span "Courses: Social Work as Subject, Society Structure and Politics, Social law"]
        ]]
-
-     ]
-
-    ]
+     ]]
 
    [:h1 {:style {:margin-bottom 0}} "Experience"]
    [:table
@@ -207,65 +204,61 @@
        [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
        [:span "Boden"]
        ]]
+     ]]
 
+   [:h1 {:style {:margin-bottom 0}} "Other"]
+   [:table
+    [:tbody
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "Hack Illinois"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2018"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Univesity of Illinois"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Rustbridge project"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Rust"]
+       ]]
 
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "Hackathon"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2017"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Spotify - DevX"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Music voting service"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Javascript"]
+       ]]
 
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "Hackathon"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2015"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Spotify - Unify"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "NFC tag service to get playlists"]
+       ]]
 
-     [:h1 {:style {:margin-bottom 0}} "Other"]
-     [:table
-      [:tbody
-       [:tr
-        [:td
-         [:h3 {:style {:margin 0 :line-height 1}} "Hack Illinois"]]]
-       [:tr
-        [:td {:style {:font-size "9pt" :color "gray"}}
-         [:span "2018"]
-         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-         [:span "Univesity of Illinois"]
-         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-         [:span "Rustbridge project"]
-         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-         [:span "Rust"]
-         ]]
-
-       [:tr
-        [:td
-         [:h3 {:style {:margin 0 :line-height 1}} "Hackathon"]]]
-       [:tr
-        [:td {:style {:font-size "9pt" :color "gray"}}
-         [:span "2017"]
-         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-         [:span "Spotify - DevX"]
-         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-         [:span "Music voting service"]
-         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-         [:span "Javascript"]
-         ]]
-
-       [:tr
-        [:td
-         [:h3 {:style {:margin 0 :line-height 1}} "Hackathon"]]]
-       [:tr
-        [:td {:style {:font-size "9pt" :color "gray"}}
-         [:span "2015"]
-         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-         [:span "Spotify - Unify"]
-         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-         [:span "NFC tag service to get playlists"]
-         ]]
-
-       [:tr
-        [:td
-         [:h3 {:style {:margin 0 :line-height 1}} "KTH Reception"]]]
-       [:tr
-        [:td {:style {:font-size "9pt" :color "gray"}}
-         [:span "2015"]
-         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-         [:span "Computer Science Chapter"]
-         [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-         [:span "Introduction new students to KTH Computer Science chapter"]
-         ]]
-
+     [:tr
+      [:td
+       [:h3 {:style {:margin 0 :line-height 1}} "KTH Reception"]]]
+     [:tr
+      [:td {:style {:font-size "9pt" :color "gray"}}
+       [:span "2015"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Computer Science Chapter"]
+       [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
+       [:span "Introduction new students to KTH Computer Science chapter"]
        ]]
 
      ]]
@@ -343,7 +336,7 @@
   [:table
    [:tbody
     (map (fn [{:keys [title text tech date img]}]
-           [:<>
+           [:<> {:key (str title text tech date img)}
             [:tr {:style {:line-height 1}}
              [:td {:col-span 2}
               [:h1 {:style {:margin "0px"}} title]]]

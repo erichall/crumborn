@@ -52,19 +52,18 @@
 (defn make-websocket!
   "Create a websocket to url with an identifier for the channel in the query-string"
   [url trigger-event channel]
-  (let [channel-id (:id channel)]
-    (if-let [chan (js/WebSocket. (str url "?id=" channel-id))]
-      (do
-        (js/console.log chan)
+  (if-let [chan (js/WebSocket. url)]
+    (do
+      (js/console.log chan)
 
-        (set! (.-onmessage chan) (receive-msg trigger-event))
-        (set! (.-onopen chan) (on-open))
-        (set! (.-onclose chan) (on-close))
-        (set! (.-onerror chan) (on-error))
+      (set! (.-onmessage chan) (receive-msg trigger-event))
+      (set! (.-onopen chan) (on-open))
+      (set! (.-onclose chan) (on-close))
+      (set! (.-onerror chan) (on-error))
 
-        (trigger-event {:name :channel-initialized :data {:channel chan}})
+      (trigger-event {:name :channel-initialized :data {:channel chan}})
 
-        (js/console.log " Websocket established")
+      (js/console.log " Websocket established")
 
-        )
-      (throw (js/Error. " Unable to establish websocket ")))))
+      )
+    (throw (js/Error. " Unable to establish websocket "))))

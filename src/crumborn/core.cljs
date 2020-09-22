@@ -3,6 +3,9 @@
             [crumborn.interop :as interop])
   (:import [goog.async Debouncer]))
 
+(goog-define ws-url "none")
+(defn get-ws-url [] ws-url)
+
 (defn debounce [f interval]
   (let [dbnc (Debouncer. f interval)]
     (fn [& args] (.apply (.-fire dbnc) dbnc (to-array args)))))

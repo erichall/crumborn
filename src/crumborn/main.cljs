@@ -11,7 +11,8 @@
                                    socket-is-closing?
                                    socket-is-closed?
                                    socket-is-connecting?
-                                   get-ready-state]]
+                                   get-ready-state
+                                   get-ws-url]]
             [crumborn.theme :refer [theme-atom is-dark-theme? get-style]]
             [crumborn.theme.light :as light-theme]
             [crumborn.theme.dark :as dark-theme]
@@ -26,7 +27,7 @@
 (def message-channel (chan))
 
 (defonce channel-atom (atom {:channel nil
-                             :id      (get-uuid)}))
+                             :id      nil}))
 (defonce app-state-atom (atom nil))
 
 (def initial-state
@@ -62,6 +63,8 @@
                  (swap! app-state-atom (fn [state]
                                          (-> (assoc-in state [:data :state] (:state data))
                                              (assoc :loading false))))
+
+                 (swap! channel-atom assoc :id (:id data))
 
                  (subscribe message-channel))
 
@@ -145,8 +148,8 @@
 
     :reconnect (do
                  (reset! channel-atom {:channel nil
-                                       :id      (get-uuid)})
-                 (make-websocket! "wss://erkanp.dev/api/ws/" handle-event! (deref channel-atom)))
+                                       :id      nil})
+                 (make-websocket! (str (get-ws-url) "/api/ws/") handle-event! (deref channel-atom)))
 
     ))
 
@@ -220,7 +223,7 @@
                (println "CHANNEL - prev " old-value " new " new-value)
                new-value
                ))
-  (make-websocket! "wss://erkanp.dev/api/ws/" handle-event! channel-atom)
+  (make-websocket! (str (get-ws-url) "/api/ws/") handle-event! channel-atom)
   )
 
 

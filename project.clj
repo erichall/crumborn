@@ -18,37 +18,40 @@
 
   :source-paths ["src"]
 
-  :cljsbuild {:builds
-              [{:id           "dev"
-                :source-paths ["src"]
+  :cljsbuild
+  {:builds
+   [{:id           "dev"
+     :source-paths ["src"]
 
-                ;; The presence of a :figwheel configuration here
-                ;; will cause figwheel to inject the figwheel client
-                ;; into your build
-                :figwheel     {:on-jsload "crumborn.main/on-js-reload"
-                               ;; :open-urls will pop open your application
-                               ;; in the default browser once Figwheel has
-                               ;; started and compiled your application.
-                               ;; Comment this out once it no longer serves you.
-                               :open-urls ["http://localhost:3449/index.html"]}
+     ;; The presence of a :figwheel configuration here
+     ;; will cause figwheel to inject the figwheel client
+     ;; into your build
+     :figwheel     {:on-jsload "crumborn.main/on-js-reload"
+                    ;; :open-urls will pop open your application
+                    ;; in the default browser once Figwheel has
+                    ;; started and compiled your application.
+                    ;; Comment this out once it no longer serves you.
+                    :open-urls ["http://localhost:3449/index.html"]}
 
-                :compiler     {:main                 crumborn.main
-                               :asset-path           "js/compiled/out"
-                               :output-to            "resources/public/js/compiled/crumborn.js"
-                               :output-dir           "resources/public/js/compiled/out"
-                               :source-map-timestamp true
-                               ;; To console.log CLJS data-structures make sure you enable devtools in Chrome
-                               ;; https://github.com/binaryage/cljs-devtools
-                               :preloads             [devtools.preload]}}
-               ;; This next build is a compressed minified build for
-               ;; production. You can build this with:
-               ;; lein cljsbuild once min
-               {:id           "min"
-                :source-paths ["src"]
-                :compiler     {:output-to     "resources/public/js/compiled/crumborn.js"
-                               :main          crumborn.main
-                               :optimizations :advanced
-                               :pretty-print  false}}]}
+     :compiler     {:main                 crumborn.main
+                    :asset-path           "js/compiled/out"
+                    :output-to            "resources/public/js/compiled/crumborn.js"
+                    :output-dir           "resources/public/js/compiled/out"
+                    :source-map-timestamp true
+                    :closure-defines      {crumborn.core/ws-url "ws://localhost:8885"}
+                    ;; To console.log CLJS data-structures make sure you enable devtools in Chrome
+                    ;; https://github.com/binaryage/cljs-devtools
+                    :preloads             [devtools.preload]}}
+    ;; This next build is a compressed minified build for
+    ;; production. You can build this with:
+    ;; lein cljsbuild once min
+    {:id           "min"
+     :source-paths ["src"]
+     :compiler     {:output-to       "resources/public/js/compiled/crumborn.js"
+                    :closure-defines {crumborn.core/ws-url "wss://erkanp.dev"}
+                    :main            crumborn.main
+                    :optimizations   :advanced
+                    :pretty-print    false}}]}
 
   :figwheel {;; :http-server-root "public" ;; default and assumes "resources"
              ;; :server-port 3449 ;; default
@@ -91,8 +94,11 @@
 
   :profiles {:dev {:dependencies  [[binaryage/devtools "0.9.10"]
                                    [figwheel-sidecar "0.5.19"]]
+
                    ;; need to add dev source path here to get user.clj loaded
                    :source-paths  ["src" "dev"]
                    ;; need to add the compliled assets to the :clean-targets
                    :clean-targets ^{:protect false} ["resources/public/js/compiled"
-                                                     :target-path]}})
+                                                     :target-path]}
+
+             })
