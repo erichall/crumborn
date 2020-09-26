@@ -30,9 +30,7 @@
           "Light"
           "Dark"
           )]]]
-     [:hr {:style {:margin-bottom "30px"}}]]
-    )
-  )
+     [:hr {:style {:margin-bottom "30px"}}]]))
 
 (defn front-page
   [{:keys [trigger-event app-state]}]
@@ -71,7 +69,6 @@
        [:span "Major in Data Sciences, Natural Languages"]
        [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
        [:a {:href "http://kth.diva-portal.org/smash/record.jsf?pid=diva2:1361475" :target "_blank"} "Thesis"]
-
        ]]
      [:tr
       [:td
@@ -276,31 +273,8 @@
        [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
        [:span "Introduction new students to KTH Computer Science chapter"]
        ]]
-
      ]]
-
    ])
-
-(defn about-me
-  [{:keys [trigger-event state]}]
-  (let [input-atom (r/atom "")]
-    (fn []
-      (let [
-            ]
-        [:div
-         [:button {:on-click (fn [e])}
-          "SUBSCRIBE"]
-         [:div
-          [:input {
-                   :value     (deref input-atom)
-                   :on-change (fn [e] (reset! input-atom (aget e "target" "value")))
-                   }]
-          [:button {:on-click (fn [])}
-           "mutate!"]
-          ]
-         ]
-        )))
-  )
 
 (defn posts [{:keys [app-state trigger-event]}]
   [:table
@@ -404,7 +378,6 @@
        [:button {:on-click (fn []
                              (trigger-event {:name :login :data (deref input-atom)})
                              )} "Login"]
-
        ])))
 
 (defn create-post
@@ -446,7 +419,6 @@
     (case active-page
       :front-page front-page
       :resume resume
-      :about-me about-me
       :posts posts
       :portfolio portfolio
       :login login

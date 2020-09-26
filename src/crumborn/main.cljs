@@ -93,8 +93,7 @@
 
     :ping (publish-message {:event-name :pong})
 
-    (log/debug "no matching clause for " event-name)
-    ))
+    (log/debug "no matching clause for " event-name)))
 
 (defn page-handler!
   [{:keys [page slug]}]
@@ -208,14 +207,14 @@
 (when (nil? (deref app-state-atom))
   (add-watch app-state-atom
              :game-loop
-             (fn [_ _ old-value new-value]
+             (fn [_ _ _ new-value]
                (render new-value)))
   (reset! app-state-atom initial-state))
 
 (when (nil? (deref theme-atom))
   (add-watch theme-atom
              :theme-game-loop
-             (fn [_ _ old-value new-value]
+             (fn [_ _ _ _]
                (reagent/force-update-all)
                (render (deref app-state-atom))))
   (reset! theme-atom light-theme/theme))
@@ -226,7 +225,6 @@
              (fn [_ _ old-value new-value]
                (log/debug "CHANNEL - prev " old-value " new " new-value)
                new-value))
-  (make-websocket! (str (get-ws-url) "/api/ws/") handle-event!)
-  )
+  (make-websocket! (str (get-ws-url) "/api/ws/") handle-event!))
 
 
