@@ -76,7 +76,9 @@
 
     :authenticate-success (swap! app-state-atom (fn [state]
                                                   (-> (assoc state :identity (:token data))
-                                                      (assoc :loading false))))
+                                                      (assoc :loading false)
+                                                      (assoc :active-page :dashboard)
+                                                      (assoc :active-slug nil))))
     :authenticate-fail (swap! app-state-atom (fn [state]
                                                (-> (assoc state :identity nil)
                                                    (assoc :loading false))))

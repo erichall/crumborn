@@ -39,6 +39,10 @@
    [:p (get-in app-state [:data :state :content :front-page :about])]
    ])
 
+(defn dashboard
+  [{:keys [trigger-event app-state]}]
+  [:h1 "Dashboard"])
+
 (defn resume [{:keys [trigger-event]}]
   [:div
    [:h1 {:style {:margin 0}} "Interests"]
@@ -423,6 +427,7 @@
       :portfolio portfolio
       :login login
       :create-post create-post
+      :dashboard dashboard
       :unauthorized unauthorized
 
       ; default
