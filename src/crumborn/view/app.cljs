@@ -41,7 +41,10 @@
 
 (defn dashboard
   [{:keys [trigger-event app-state]}]
-  [:h1 "Dashboard"])
+  [:div
+   [:h1 "Dashboard"]
+   [:p {:on-click (trigger-event {:name :page-selected :data {:page :create-post}})} "Write!"]]
+  )
 
 (defn resume [{:keys [trigger-event]}]
   [:div
