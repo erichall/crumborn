@@ -43,8 +43,9 @@
   [{:keys [trigger-event app-state]}]
   [:div
    [:h1 "Dashboard"]
-   [:p {:on-click (trigger-event {:name :page-selected :data {:page :create-post}})} "Write!"]]
-  )
+   [:p {:on-click (trigger-event {:name :page-selected :data {:page :create-post}})} "Write!"]
+   [:p {:on-click (trigger-event {:name :page-selected :data {:page :create-post}})} "Stats!"]
+   [:p {:on-click (trigger-event {:name :page-selected :data {:page :create-post}})} "Logs!"]])
 
 (defn resume [{:keys [trigger-event]}]
   [:div
