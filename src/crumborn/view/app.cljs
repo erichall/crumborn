@@ -29,7 +29,11 @@
         (if (is-dark-theme?)
           "Light"
           "Dark"
-          )]]]
+          )]
+       [:li {:style (assoc (get-style [:navbar :li]) :float "right")}
+        [:span {:title "Active visitors"}
+         (get app-state :visitors)]]
+       ]]
      [:hr {:style {:margin-bottom "30px"}}]]))
 
 (defn front-page

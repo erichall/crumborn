@@ -42,6 +42,7 @@
    :loading     true
    :identity    nil
    :data        nil
+   :visitors    nil
    })
 
 (defn send!
@@ -95,6 +96,8 @@
 
     :ping (publish-message {:event-name :pong})
 
+    :page-count (swap! app-state-atom assoc :visitors (:visitors data))
+
     (log/debug "no matching clause for " event-name)))
 
 (defn page-handler!
@@ -145,6 +148,8 @@
 
     :vote-up (publish-message data)
     :vote-down (publish-message data)
+
+    :page-count-requested (publish-message data)
 
     :create-post (publish-message {:event-name :create-post
                                    :data       data})
