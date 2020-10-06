@@ -58,3 +58,15 @@
 (defn socket-is-closing? [channel] (ready-state channel 2))
 (defn socket-is-closed? [channel] (ready-state channel 3))
 
+(defn set-loading
+  [state value]
+  (assoc state :loading value))
+
+(defn new-page?
+  [state page]
+  (and (-> page nil? not) (not= (:active-page state) page)))
+
+(defn new-slug?
+  [state slug]
+  (and (-> slug nil? not) (not= (:active-slug state) slug)))
+

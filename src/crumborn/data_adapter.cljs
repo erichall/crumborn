@@ -46,8 +46,7 @@
     (.send channel msg)
     (throw (js/Error. "Socket is not open"))))
 
-(defn on-open [data channel]
-  (log/debug "Open! the data we get is:: " data " and the channel is " channel))
+(defn on-open [data channel] nil)
 (defn on-close [] (log/debug "Close!"))
 (defn on-error [] (log/debug "Error!"))
 
