@@ -11,8 +11,7 @@
                  [org.clojure/core.async "0.4.500"]
                  [reagent "0.8.1"]
                  [cljs-http "0.1.46"]
-                 [com.taoensso/timbre "5.0.0"]
-                 ]
+                 [com.taoensso/timbre "5.0.0"]]
 
   :plugins [[lein-figwheel "0.5.19"]
             [lein-cljsbuild "1.1.7" :exclusions [[org.clojure/clojure]]]]

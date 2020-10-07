@@ -50,13 +50,6 @@
   []
   (js/btoa (.toString (random-uuid))))
 
-(defn get-ready-state [channel] (aget channel "readyState"))
-(defn- ready-state [channel n] (= (get-ready-state channel) n))
-
-(defn socket-is-connecting? [channel] (ready-state channel 0))
-(defn socket-is-open? [channel] (ready-state channel 1))
-(defn socket-is-closing? [channel] (ready-state channel 2))
-(defn socket-is-closed? [channel] (ready-state channel 3))
 
 (defn set-loading
   [state value]
@@ -69,4 +62,14 @@
 (defn new-slug?
   [state slug]
   (and (-> slug nil? not) (not= (:active-slug state) slug)))
+
+(defn get-page
+  "Get a page, if it not defined in pages, default to front-page"
+  [pages page-id]
+  {:pre  [(= (keyword? page-id))]
+   :post [(map? %)]}
+  (if (contains? pages page-id)
+    (get pages page-id)
+    (get pages :front-page)))
+
 

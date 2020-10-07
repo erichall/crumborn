@@ -16,12 +16,18 @@
        (get-in app-state [:data :state :content :header :title])]]
      [:nav {:style (get-style [:navbar :nav])}
       [:ul {:style (get-style [:navbar :ul])}
-       [:li {:on-click (fn [] (goto :resume)) :style (get-style [:navbar :li] {:margin-left "0px"} (when (active-page-is? app-state :resume) highlight-style))}
+       [:li {:on-click (fn [] (goto :resume)) :style (get-style [:navbar :li]
+                                                                {:margin-left "0px"}
+                                                                (when (active-page-is? app-state :resume) highlight-style))}
         "Resume"]
        [:li {:on-click (fn [] (goto :posts)) :style (get-style [:navbar :li]
-                                                               (when (or (active-page-is? app-state :posts) (active-page-is? app-state :post)) highlight-style))}
+                                                               (when (or (active-page-is? app-state :posts)
+                                                                         (active-page-is? app-state :post))
+                                                                 highlight-style)
+                                                               )}
         "Posts"]
-       [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li] (when (active-page-is? app-state :portfolio) highlight-style))}
+       [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li] (when (active-page-is? app-state :portfolio)
+                                                                                   highlight-style))}
         "Portfolio"]
 
        (when (authenticated? app-state)
@@ -292,50 +298,50 @@
    ])
 
 (defn posts [{:keys [app-state trigger-event]}]
-  [:div
-   [:table
-    [:tbody
-     (map (fn [{:keys [id points title created content author]}]
-            [:<> {:key id}
-             [:tr {:style {:line-height 1}}
-              [:td [:h1 {:style    {:margin "0px"
-                                    :cursor "pointer"}
-                         :on-click (fn [] (trigger-event {:name :post-selected :data {:page-id :post :slug id}}))
-                         } title]]]
-             [:tr {:style {:line-height 1 :padding-bottom "10px"}}
-              [:td {:style {:font-size "9pt" :color "gray"}}
-               [:span (str points " Points by " author)]
+  [:table
+   [:tbody
+    (map (fn [{:keys [id points title created content author]}]
+           [:<> {:key id}
+            [:tr {:style {:line-height 1}}
+             [:td [:h1 {:style    {:margin "0px"
+                                   :cursor "pointer"}
+                        :on-click (fn [] (trigger-event {:name :post-selected :data {:page-id :post :slug id}}))
+                        } title]]]
+            [:tr {:style {:line-height 1 :padding-bottom "10px"}}
+             [:td {:style {:font-size "9pt" :color "gray"}}
+              [:span (str points " Points by " author)]
 
-               [:span {:style {:padding-left "10px"}} " | "]
-               [:span {:style {:padding-left "10px" :padding-right "10px"}}
-                [:span {:style    {:cursor              "pointer"
-                                   :font-size           "9pt"
-                                   :color               "gray"
-                                   :-webkit-user-select "none"
-                                   :-moz-user-select    "none"
-                                   :-ms-user-select     "none"
-                                   }
-                        :on-click (fn [] (trigger-event {:name :vote-up :data {:event-name :vote-down
-                                                                               :data       {:id id}}}))}
-                 "▼"]
-                [:span {:style    {:cursor              "pointer"
-                                   :-webkit-user-select "none"
-                                   :-moz-user-select    "none"
-                                   :-ms-user-select     "none"
-                                   :font-size           "9pt"
-                                   :color               "gray"
-                                   }
-                        :on-click (fn []
-                                    (trigger-event {:name :vote-up :data {:event-name :vote-up
-                                                                          :data       {:id id}}}))}
-                 "▲"]]
-               [:span {:style {:padding-left "10px"}} " | "]
-               [:span {:style {:padding-left "10px"}} created]
-               ]
+              [:span {:style {:padding-left "10px"}} " | "]
+              [:span {:style {:padding-left "10px" :padding-right "10px"}}
+               [:span {:style    {:cursor              "pointer"
+                                  :font-size           "9pt"
+                                  :color               "gray"
+                                  :-webkit-user-select "none"
+                                  :-moz-user-select    "none"
+                                  :-ms-user-select     "none"
+                                  }
+                       :on-click (fn [] (trigger-event {:name :vote-up :data {:event-name :vote-down
+                                                                              :data       {:id id}}}))}
+                "▼"]
+               [:span {:style    {:cursor              "pointer"
+                                  :-webkit-user-select "none"
+                                  :-moz-user-select    "none"
+                                  :-ms-user-select     "none"
+                                  :font-size           "9pt"
+                                  :color               "gray"
+                                  }
+                       :on-click (fn []
+                                   (trigger-event {:name :vote-up :data {:event-name :vote-up
+                                                                         :data       {:id id}}}))}
+                "▲"]]
+              [:span {:style {:padding-left "10px"}} " | "]
+              [:span {:style {:padding-left "10px"}} created]
               ]
-             [:tr {:style {:height "25px"}}]]
-            ) (vals (get-in app-state [:data :state :posts])))]
-    ]])
+             ]
+            [:tr {:style {:height "25px"}}]]
+           ) (vals (get-in app-state [:data :state :posts])))]
+   ]
+  )
 
 (defn portfolio
   [{:keys [app-state trigger-event]}]
@@ -442,17 +448,15 @@
       ; default
       front-page)))
 
-(defn app-maker
-  [{:keys [pages]}]
-  (fn [{:keys [app-state trigger-event theme]}]
-    [:div {:style {:height "calc(100vh - 4em - 3.4em)"}}
-     (let [{:keys [active-page]} app-state]
-       (if (loading? app-state)
-         [:h1 "Spinning"]
-         [:<>
-          [menu {:app-state     app-state
-                 :trigger-event trigger-event
-                 :theme         theme}]
-          [(get-in pages [active-page :view]) {:app-state     app-state
-                                               :trigger-event trigger-event
-                                               :theme         theme}]]))]))
+(defn app-component
+  [{:keys [app-state trigger-event theme pages]}]
+  [:<>
+   (if (loading? app-state)
+     [:h1 "Spinning"]
+     [:<>
+      [menu {:app-state     app-state
+             :trigger-event trigger-event
+             :theme         theme}]
+      [(get-in pages [(:active-page app-state) :view]) {:app-state     app-state
+                                                        :trigger-event trigger-event
+                                                        :theme         theme}]])])

@@ -5,6 +5,10 @@ body {
     padding-top: 1em;
 }
 
+::-webkit-scrollbar {
+    display: none;
+}
+
 .container {
     max-width: 34em;
     margin: auto;
