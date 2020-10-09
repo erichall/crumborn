@@ -10,10 +10,7 @@
   (let [goto (fn [page] (trigger-event {:name :page-selected :data {:page-id page}}))
         highlight-style {:border-bottom "1px solid black"}]
     [:div
-     [:div {:on-click (fn [] (goto :front-page))
-            :style    {:cursor "pointer"}}
-      [:h1 {:style (get-style [:title])}
-       (get-in app-state [:data :state :content :header :title])]]
+
      [:nav {:style (get-style [:navbar :nav])}
       [:ul {:style (get-style [:navbar :ul])}
        [:li {:on-click (fn [] (goto :resume)) :style (get-style [:navbar :li]
@@ -404,18 +401,29 @@
 
 (defn create-post
   [{:keys [app-state trigger-event]}]
-  (let [input-atom (r/atom "")]
+  (let [input-atom (r/atom (-> (get app-state :post-template)
+                               (as-> tmp
+                                     (with-out-str (cljs.pprint/pprint tmp)))
+                               (str "\n ##### CONTENT #####")))]
     (fn []
-      [:div
+      [:div {:style {:height         "100%"
+                     :display        "flex"
+                     :flex           1
+                     :flex-direction "column"}}
        [:h1 "create-post"]
        [:textarea {:value     (deref input-atom)
                    :style     {:background-color "lightgray"
-                               :height           "350px"
-                               :width            "100%"}
-                   :on-change (fn [e] (reset! input-atom (aget e "target" "value")))}]
+                               :outline          "none"
+                               :resize           "none"
+                               :flex-grow        1
+                               :flex             1
+                               }
+                   :on-change (fn [e] (reset! input-atom (aget e "target" "value")))}
+        ]
 
-       [:button {:on-click (fn [] (trigger-event {:name :create-post
-                                                  :data {:post-content (deref input-atom)}}))} "Create"]
+       [:button
+        {:on-click (fn [] (trigger-event {:name :create-post
+                                          :data {:post-content (deref input-atom)}}))} "Create"]
 
        ]))
   )
@@ -426,37 +434,33 @@
         post (get-in app-state [:data :state :posts slug])] ;; TODO handle when we don't have the post in the state?
     [:h1 (:title post)]))
 
-(defn unauthorized
+(defn footer
+  [{:keys [app-state]}]
+  [:div {:style {:width           "100%"
+                 :text-align      "center"
+                 :height          "50px"
+                 :display         "flex"
+                 :justify-content "center"
+                 :align-items     "center"}}
+   [:span
+    "e"]])
+
+(defn header
   [{:keys [app-state trigger-event]}]
-  [:h2 "Unauthorized - 403"])
-
-(defn get-page
-  [{:keys [active-page active-slug]}]
-
-  (if (some? active-slug)
-    post
-    (case active-page
-      :front-page front-page
-      :resume resume
-      :posts posts
-      :portfolio portfolio
-      :login login
-      :create-post create-post
-      :dashboard dashboard
-      :unauthorized unauthorized
-
-      ; default
-      front-page)))
+  [:div {:on-click (fn [] (trigger-event {:name :page-selected :data {:page-id :front-page}}))
+         :style    {:cursor "pointer"}}
+   [:h1 {:style (get-style [:title])}
+    (get-in app-state [:data :state :content :header :title])]])
 
 (defn app-component
-  [{:keys [app-state trigger-event theme pages]}]
+  [{:keys [app-state trigger-event theme pages] :as args}]
   [:<>
    (if (loading? app-state)
      [:h1 "Spinning"]
      [:<>
-      [menu {:app-state     app-state
-             :trigger-event trigger-event
-             :theme         theme}]
-      [(get-in pages [(:active-page app-state) :view]) {:app-state     app-state
-                                                        :trigger-event trigger-event
-                                                        :theme         theme}]])])
+      [header args]
+      [menu args]
+      [(get-in pages [(:active-page app-state) :view]) args]
+      [footer args]
+      ])
+   ])
