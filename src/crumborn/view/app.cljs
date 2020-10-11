@@ -402,14 +402,18 @@
 (defn create-post
   [{:keys [app-state trigger-event]}]
   (let [input-atom (r/atom {:settings (-> (get app-state :post-template)
-                                          (as-> tmp
-                                                (with-out-str (cljs.pprint/pprint (or tmp "")))))
+                                          str
+                                          ;(as-> tmp
+                                          ;      (with-out-str (cljs.pprint/pprint (or tmp ""))))
+                                          )
                             :content  ""})]
     (fn []
+
       [:div {:style {:height         "100%"
                      :display        "flex"
                      :flex           1
                      :flex-direction "column"}}
+
        [:h1 "create-post"]
        [:textarea {:value     (-> (deref input-atom) :settings)
                    :style     {:background-color "lightgray"
