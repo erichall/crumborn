@@ -403,8 +403,7 @@
   [{:keys [app-state trigger-event]}]
   (let [input-atom (r/atom (-> (get app-state :post-template)
                                (as-> tmp
-                                     (with-out-str (cljs.pprint/pprint tmp)))
-                               (str "\n ##### CONTENT #####")))]
+                                     (with-out-str (cljs.pprint/pprint (or tmp ""))))))]
     (fn []
       [:div {:style {:height         "100%"
                      :display        "flex"
