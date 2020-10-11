@@ -82,8 +82,7 @@
 
       (when-not (contains? pages id)
         (swap! app-state-atom (fn [state]
-                                (-> (assoc state :active-page :front-page)
-                                    (assoc :active-slug nil))))
+                                (assoc (assoc state :active-page :front-page) :active-slug nil)))
         (recur))
 
       ;; Do preparation if the view needs

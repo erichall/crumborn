@@ -94,13 +94,21 @@
              ;; :server-logfile false
              }
 
-  :profiles {:dev {:dependencies  [[binaryage/devtools "0.9.10"]
-                                   [figwheel-sidecar "0.5.19"]]
+  :profiles {:dev  {:dependencies  [[binaryage/devtools "0.9.10"]
+                                    [figwheel-sidecar "0.5.19"]]
 
-                   ;; need to add dev source path here to get user.clj loaded
-                   :source-paths  ["src" "dev"]
-                   ;; need to add the compliled assets to the :clean-targets
-                   :clean-targets ^{:protect false} ["resources/public/js/compiled"
-                                                     :target-path]}
+                    ;; need to add dev source path here to get user.clj loaded
+                    :source-paths  ["src" "dev"]
+                    ;; need to add the compliled assets to the :clean-targets
+                    :clean-targets ^{:protect false} ["resources/public/js/compiled"
+                                                      :target-path]}
 
-             })
+             :lint {:source-paths ^:replace ["src"]
+                    :test-paths   ^:replace []
+                    :plugins      [[lein-kibit "0.1.8"]]}
+
+             }
+  :aliases {"kibit"    ["with-profile" "+lint" "kibit"]
+            "lint"     ["do"
+                        ["kibit"]]
+            })

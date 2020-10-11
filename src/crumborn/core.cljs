@@ -32,7 +32,7 @@
 
 (defn authenticated?
   [state]
-  (-> (get-identitiy state) some?))
+  (some? (get-identitiy state)))
 
 (defn loading?
   [state]
@@ -48,7 +48,7 @@
 
 (defn get-uuid
   []
-  (js/btoa (.toString (random-uuid))))
+  (js/btoa (str (random-uuid))))
 
 
 (defn set-loading
