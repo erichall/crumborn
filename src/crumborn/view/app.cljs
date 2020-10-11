@@ -401,24 +401,35 @@
 
 (defn create-post
   [{:keys [app-state trigger-event]}]
-  (let [input-atom (r/atom (-> (get app-state :post-template)
-                               (as-> tmp
-                                     (with-out-str (cljs.pprint/pprint (or tmp ""))))))]
+  (let [input-atom (r/atom {:settings (-> (get app-state :post-template)
+                                          (as-> tmp
+                                                (with-out-str (cljs.pprint/pprint (or tmp "")))))
+                            :content  ""})]
     (fn []
       [:div {:style {:height         "100%"
                      :display        "flex"
                      :flex           1
                      :flex-direction "column"}}
        [:h1 "create-post"]
-       [:textarea {:value     (deref input-atom)
+       [:textarea {:value     (-> (deref input-atom) :settings)
                    :style     {:background-color "lightgray"
                                :outline          "none"
                                :resize           "none"
-                               :flex-grow        1
-                               :flex             1
+                               :height           "20%"
+                               :width            "100%"
+                               :margin-bottom    "20px"
                                }
-                   :on-change (fn [e] (reset! input-atom (aget e "target" "value")))}
-        ]
+                   :on-change (fn [e] (reset! input-atom {:settings (aget e "target" "value")
+                                                          :content  (get (deref input-atom) :content)}))}]
+       [:textarea {:value     (-> (deref input-atom) :content)
+                   :on-change (fn [e] (reset! input-atom {:settings (-> (deref input-atom) :settings)
+                                                          :content  (aget e "target" "value")}))
+                   :style     {:background-color "lightgray"
+                               :height           "50%"
+                               :width            "100%"
+                               :outline          "none"
+                               :resize           "none"
+                               }}]
 
        [:button
         {:on-click (fn [] (trigger-event {:name :create-post
