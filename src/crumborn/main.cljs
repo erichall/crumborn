@@ -31,6 +31,20 @@
 (defonce channel-atom (atom {:channel nil
                              :id      nil}))
 
+(defn make-mutation-channel
+  [node]
+  (let [mutation-channel (async/chan)
+        observer (js/MutationObserver.
+                   (fn [mutations]
+                     (doseq [m mutations]
+                       (async/put! mutation-channel m))))]
+    (.observe observer
+              node
+              #js {:characterData true
+                   :childList     false
+                   :subtree       true})
+    mutation-channel))
+
 (def initial-state
   {:size        (interop/get-window-size)
    :active-page (or (:page (get-page-and-slug)) :front-page)
@@ -216,6 +230,14 @@
                                                                            :page-id :post}})
                                (when (contains? pages page)
                                  (handle-event! {:name :page-selected :data {:page-id page}}))))))
+
+;; Listene to app wide content changes in html TODO
+;(let [mutation-channel (make-mutation-channel (interop/get-element-by-id "app"))]
+;  (async/go-loop
+;    []
+;    (let [mutation (async/<! mutation-channel)]
+;      (js/console.log "Mutation::" mutation)
+;      (recur))))
 
 (consume-pages! page-channel)
 (consume-messages! message-channel)

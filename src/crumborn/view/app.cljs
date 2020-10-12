@@ -401,46 +401,48 @@
 
 (defn create-post
   [{:keys [app-state trigger-event]}]
-  (let [input-atom (r/atom {:settings (-> (get app-state :post-template)
-                                          str
-                                          ;(as-> tmp
-                                          ;      (with-out-str (cljs.pprint/pprint (or tmp ""))))
-                                          )
+  (let [input-atom (r/atom {:settings (str (->> (get app-state :post-template)
+                                                (reduce (fn [acc-str [k v]] (str
+                                                                              acc-str
+                                                                              k
+                                                                              " "
+                                                                              (cond
+                                                                                (= v "") "\"\""
+                                                                                (string? v) (str "\"" v "\"")
+                                                                                :else v)
+                                                                              "\n ")) "{\n "))
+                                           "}")
                             :content  ""})]
     (fn []
-
-      [:div {:style {:height         "100%"
-                     :display        "flex"
+      [:div {:style {:display        "flex"
                      :flex           1
                      :flex-direction "column"}}
 
-       [:h1 "create-post"]
-       [:textarea {:value     (-> (deref input-atom) :settings)
+       [:h1 {:content-editable false} "create-post"]
+       [:textarea {:role      "textarea"
+                   :value     (-> (deref input-atom) :settings)
                    :style     {:background-color "lightgray"
                                :outline          "none"
                                :resize           "none"
                                :height           "20%"
-                               :width            "100%"
                                :margin-bottom    "20px"
+                               :flex             1.2
                                }
-                   :on-change (fn [e] (reset! input-atom {:settings (aget e "target" "value")
-                                                          :content  (get (deref input-atom) :content)}))}]
+                   :on-change (fn [e]
+                                (reset! input-atom {:settings (aget e "target" "value")
+                                                    :content  (get (deref input-atom) :content)}))}]
        [:textarea {:value     (-> (deref input-atom) :content)
                    :on-change (fn [e] (reset! input-atom {:settings (-> (deref input-atom) :settings)
                                                           :content  (aget e "target" "value")}))
                    :style     {:background-color "lightgray"
-                               :height           "50%"
-                               :width            "100%"
+                               :flex             3
                                :outline          "none"
                                :resize           "none"
+                               :margin-bottom    "10px"
                                }}]
-
        [:button
         {:on-click (fn [] (trigger-event {:name :create-post
-                                          :data {:post-content (deref input-atom)}}))} "Create"]
-
-       ]))
-  )
+                                          :data {:post-content (deref input-atom)}}))} "Create"]])))
 
 (defn post
   [{:keys [app-state]}]
