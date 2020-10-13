@@ -427,10 +427,13 @@
                                :height           "20%"
                                :margin-bottom    "20px"
                                :flex             1.2
+                               :flex-shrink      0
                                }
                    :on-change (fn [e]
                                 (reset! input-atom {:settings (aget e "target" "value")
                                                     :content  (get (deref input-atom) :content)}))}]
+       (when-not (crumborn.core/valid-edn? (:settings (deref input-atom)))
+         [:span {:style {:font-weight "200" :color "red"}} "Invalid edn"])
        [:textarea {:value     (-> (deref input-atom) :content)
                    :on-change (fn [e] (reset! input-atom {:settings (-> (deref input-atom) :settings)
                                                           :content  (aget e "target" "value")}))
@@ -440,9 +443,14 @@
                                :resize           "none"
                                :margin-bottom    "10px"
                                }}]
+
        [:button
-        {:on-click (fn [] (trigger-event {:name :create-post
-                                          :data {:post-content (deref input-atom)}}))} "Create"]])))
+        {:on-click (fn []
+                     (let [settings (:settings (deref input-atom))]
+                       (when (crumborn.core/valid-edn? settings)
+                         (trigger-event {:name :create-post
+                                         :data {:settings (clojure.edn/read-string settings)
+                                                :content  (:content (deref input-atom))}}))))} "Create"]])))
 
 (defn post
   [{:keys [app-state]}]

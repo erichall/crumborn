@@ -72,4 +72,10 @@
     (get pages page-id)
     (get pages :front-page)))
 
+(defn valid-edn?
+  [maybe-edn]
+  (try
+    (boolean (clojure.edn/read-string maybe-edn))
+    (catch js/Error _
+      false)))
 
