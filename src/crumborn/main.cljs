@@ -147,6 +147,7 @@
     :page-count (swap! app-state-atom assoc :visitors (:visitors data))
 
     :post-template (swap! app-state-atom assoc :post-template (:template data))
+    :post-created (log/debug data)
 
     (log/debug "no matching clause for " event-name)))
 

@@ -402,17 +402,20 @@
 (defn create-post
   [{:keys [app-state trigger-event]}]
   (let [input-atom (r/atom {:settings (str (->> (get app-state :post-template)
-                                                (reduce (fn [acc-str [k v]] (str
-                                                                              acc-str
-                                                                              k
-                                                                              " "
-                                                                              (cond
-                                                                                (= v "") "\"\""
-                                                                                (string? v) (str "\"" v "\"")
-                                                                                :else v)
-                                                                              "\n ")) "{\n "))
+                                                (reduce (fn [acc-str [k v]]
+                                                          (if (= k :content) ;; remove content here
+                                                            acc-str
+                                                            (str
+                                                              acc-str
+                                                              k
+                                                              " "
+                                                              (cond
+                                                                (= v "") "\"\""
+                                                                (string? v) (str "\"" v "\"")
+                                                                :else v)
+                                                              "\n "))) "{\n "))
                                            "}")
-                            :content  ""})]
+                            :content  (get-in app-state [:post-template :content])})]
     (fn []
       [:div {:style {:display        "flex"
                      :flex           1
@@ -430,13 +433,11 @@
                                :flex-shrink      0
                                }
                    :on-change (fn [e]
-                                (reset! input-atom {:settings (aget e "target" "value")
-                                                    :content  (get (deref input-atom) :content)}))}]
+                                (swap! input-atom assoc :settings (aget e "target" "value")))}]
        (when-not (crumborn.core/valid-edn? (:settings (deref input-atom)))
          [:span {:style {:font-weight "200" :color "red"}} "Invalid edn"])
        [:textarea {:value     (-> (deref input-atom) :content)
-                   :on-change (fn [e] (reset! input-atom {:settings (-> (deref input-atom) :settings)
-                                                          :content  (aget e "target" "value")}))
+                   :on-change (fn [e] (swap! input-atom assoc :content (aget e "target" "value")))
                    :style     {:background-color "lightgray"
                                :flex             3
                                :outline          "none"
@@ -449,8 +450,8 @@
                      (let [settings (:settings (deref input-atom))]
                        (when (crumborn.core/valid-edn? settings)
                          (trigger-event {:name :create-post
-                                         :data {:settings (clojure.edn/read-string settings)
-                                                :content  (:content (deref input-atom))}}))))} "Create"]])))
+                                         :data {:post (-> (clojure.edn/read-string settings)
+                                                          (assoc :content (:content @input-atom)))}}))))} "Create"]])))
 
 (defn post
   [{:keys [app-state]}]
