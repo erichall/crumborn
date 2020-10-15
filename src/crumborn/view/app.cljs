@@ -2,6 +2,7 @@
   (:require [crumborn.theme :refer [get-style is-dark-theme? theme-atom]]
             [crumborn.core :refer [authenticated? loading? active-page-is?]]
             [reagent.core :as r]
+            [cljs.core.async :as async]
             ))
 
 
@@ -400,58 +401,58 @@
        ])))
 
 (defn create-post
-  [{:keys [app-state trigger-event]}]
-  (let [input-atom (r/atom {:settings (str (->> (get app-state :post-template)
-                                                (reduce (fn [acc-str [k v]]
-                                                          (if (= k :content) ;; remove content here
-                                                            acc-str
-                                                            (str
-                                                              acc-str
-                                                              k
-                                                              " "
-                                                              (cond
-                                                                (= v "") "\"\""
-                                                                (string? v) (str "\"" v "\"")
-                                                                :else v)
-                                                              "\n "))) "{\n "))
-                                           "}")
-                            :content  (get-in app-state [:post-template :content])})]
+  [{:keys [app-state trigger-event wait-for]}]
+  (let [input-atom (r/atom {:settings (-> (get app-state :post-template)
+                                          (dissoc :content)
+                                          crumborn.core/map->pretty-string)
+                            :content  (get-in app-state [:post-template :content])
+                            :created? false
+                            :error    nil})]
+
+    (wait-for :post-created :create-post (fn [data]
+                                           (condp = (:status data)
+                                             :success (r/rswap! input-atom merge {:created? true :error nil})
+                                             :error (r/rswap! input-atom merge {:created? false :error (:error data)})
+                                             )))
     (fn []
-      [:div {:style {:display        "flex"
-                     :flex           1
-                     :flex-direction "column"}}
+      (let [maybe-settings (crumborn.core/valid-edn? (:settings @input-atom))]
+        [:div {:style {:display "block" :height "100vh"}}
+         [:h1 {:content-editable false} "create-post"]
+         (when (:created? @input-atom)
+           "Post created!!")
+         (when (:error @input-atom)
+           (str "error - " (:error @input-atom)))
+         [:textarea {:value       (-> (deref input-atom) :settings)
+                     :spell-check false
+                     :style       {:background-color "lightgray"
+                                   :outline          "none"
+                                   :resize           "none"
+                                   :width            "100%"
+                                   :height           "15%"
+                                   :margin-bottom    "20px"
+                                   }
+                     :on-change   (fn [e]
+                                    (swap! input-atom assoc :settings (aget e "target" "value")))}]
+         (when-not maybe-settings
+           [:span {:style {:color "red"}} "Invalid edn"])
+         [:textarea {:value     (-> (deref input-atom) :content)
+                     :on-change (fn [e] (swap! input-atom assoc :content (aget e "target" "value")))
+                     :style     {:background-color "lightgray"
+                                 :outline          "none"
+                                 :resize           "none"
+                                 :width            "100%"
+                                 :height           "30%"
+                                 :margin-bottom    "10px"
+                                 }}]
 
-       [:h1 {:content-editable false} "create-post"]
-       [:textarea {:role      "textarea"
-                   :value     (-> (deref input-atom) :settings)
-                   :style     {:background-color "lightgray"
-                               :outline          "none"
-                               :resize           "none"
-                               :height           "20%"
-                               :margin-bottom    "20px"
-                               :flex             1.2
-                               :flex-shrink      0
-                               }
-                   :on-change (fn [e]
-                                (swap! input-atom assoc :settings (aget e "target" "value")))}]
-       (when-not (crumborn.core/valid-edn? (:settings (deref input-atom)))
-         [:span {:style {:font-weight "200" :color "red"}} "Invalid edn"])
-       [:textarea {:value     (-> (deref input-atom) :content)
-                   :on-change (fn [e] (swap! input-atom assoc :content (aget e "target" "value")))
-                   :style     {:background-color "lightgray"
-                               :flex             3
-                               :outline          "none"
-                               :resize           "none"
-                               :margin-bottom    "10px"
-                               }}]
-
-       [:button
-        {:on-click (fn []
-                     (let [settings (:settings (deref input-atom))]
-                       (when (crumborn.core/valid-edn? settings)
-                         (trigger-event {:name :create-post
-                                         :data {:post (-> (clojure.edn/read-string settings)
-                                                          (assoc :content (:content @input-atom)))}}))))} "Create"]])))
+         [:button
+          {:on-click (fn []
+                       (let [settings (:settings (deref input-atom))]
+                         (when (crumborn.core/valid-edn? settings)
+                           (trigger-event {:name :create-post
+                                           :data {:post (-> (clojure.edn/read-string settings)
+                                                            (assoc :content (:content @input-atom)))}}))))} "Create"]])))
+  )
 
 (defn post
   [{:keys [app-state]}]
@@ -460,15 +461,17 @@
     [:h1 (:title post)]))
 
 (defn footer
-  [{:keys [app-state]}]
-  [:div {:style {:width           "100%"
-                 :text-align      "center"
-                 :height          "50px"
-                 :display         "flex"
-                 :justify-content "center"
-                 :align-items     "center"}}
-   [:span
-    "e"]])
+  [{:keys [app-state wait-for]}]
+  ;(wait-for :post-created :footer (fn [d] (println "we are waiting in the footer also!!")))
+  (fn []
+    [:div {:style {:width           "100%"
+                   :text-align      "center"
+                   :height          "50px"
+                   :display         "flex"
+                   :justify-content "center"
+                   :align-items     "center"}}
+     [:span
+      "e"]]))
 
 (defn header
   [{:keys [app-state trigger-event]}]
@@ -478,14 +481,17 @@
     (get-in app-state [:data :state :content :header :title])]])
 
 (defn app-component
-  [{:keys [app-state trigger-event theme pages] :as args}]
+  [{:keys [app-state trigger-event theme pages wait-for] :as args}]
   [:<>
    (if (loading? app-state)
      [:h1 "Spinning"]
      [:<>
       [header args]
       [menu args]
-      [(get-in pages [(:active-page app-state) :view]) args]
+      [(get-in pages [(:active-page app-state) :view]) {:app-state     app-state
+                                                        :trigger-event trigger-event
+                                                        :theme         theme
+                                                        :wait-for      wait-for}]
       [footer args]
       ])
    ])

@@ -26,6 +26,7 @@
 
 (def message-channel (async/chan))
 (def page-channel (async/chan))
+(def wait-for-channel (async/chan))
 
 (defonce app-state-atom (atom nil))
 (defonce channel-atom (atom {:channel nil
@@ -52,11 +53,32 @@
    :loading     true
    :identity    nil
    :data        nil
-   :visitors    nil})
+   :visitors    nil
+   })
+
+(defonce consumers-atom (atom []))
 
 (defn publish-message
   [message]
   (async/put! message-channel message))
+
+(defn wait-for
+  [evt-name source callback-fn]
+  (swap! consumers-atom (fn [s]
+                          (map (fn [consumer]
+                                 (if (not (= (:source consumer) source))
+
+                                   )
+                                 ) s)
+                          {:evt-name evt-name :callback-fn callback-fn}))
+  (async/go-loop
+    []
+    (let [{:keys [event-name data]} (async/<! wait-for-channel)]
+      (println @consumers-atom)
+      (doseq [{:keys [evt-name callback-fn]} @consumers-atom]
+        (when (= evt-name event-name)
+          (callback-fn data)))
+      (recur))))
 
 (def pages
   {:front-page  {:id   :front-page
@@ -147,7 +169,9 @@
     :page-count (swap! app-state-atom assoc :visitors (:visitors data))
 
     :post-template (swap! app-state-atom assoc :post-template (:template data))
-    :post-created (log/debug data)
+    :post-created (async/put! wait-for-channel {:wait-for-name :any
+                                                :event-name    :post-created
+                                                :data          data})
 
     (log/debug "no matching clause for " event-name)))
 
@@ -166,7 +190,6 @@
 
     :resize (swap! app-state-atom assoc :size data)
 
-
     :login (publish-message {:event-name :login
                              :data       data})
 
@@ -183,7 +206,10 @@
     :reconnect (do
                  (reset! channel-atom {:channel nil
                                        :id      nil})
-                 (ws/make-websocket! (str (get-ws-url) "/api/ws/") handle-event!))))
+                 (ws/make-websocket! (str (get-ws-url) "/api/ws/") handle-event!))
+    ;; else
+    (log/debug "Handle event has no clause for " name)
+    ))
 
 (defn consume-messages!
   [channel]
@@ -210,7 +236,8 @@
   [app-state]
   [app-component {:pages         pages
                   :app-state     app-state
-                  :trigger-event handle-event!}])
+                  :trigger-event handle-event!
+                  :wait-for      wait-for}])
 (defn render
   [app-state]
   (reagent/render-component [#'app app-state] (interop/get-element-by-id "app")))

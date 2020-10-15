@@ -75,7 +75,22 @@
 (defn valid-edn?
   [maybe-edn]
   (try
-    (boolean (clojure.edn/read-string maybe-edn))
+    (clojure.edn/read-string maybe-edn)
     (catch js/Error _
-      false)))
+      nil)))
+
+(defn map->pretty-string
+  [m]
+  (str
+    (reduce (fn [acc-str [k v]]
+              (str
+                acc-str
+                k
+                " "
+                (cond
+                  (= v "") "\"\""
+                  (string? v) (str "\"" v "\"")
+                  :else v)
+                "\n ")) "{\n " m)
+    "}"))
 
