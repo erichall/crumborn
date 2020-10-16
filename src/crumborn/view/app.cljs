@@ -1,6 +1,6 @@
 (ns crumborn.view.app
   (:require [crumborn.theme :refer [get-style is-dark-theme? theme-atom]]
-            [crumborn.core :refer [authenticated? loading? active-page-is?]]
+            [crumborn.core :refer [authenticated? loading? active-page-is? debounce]]
             [reagent.core :as r]
             [cljs.core.async :as async]
             ))
@@ -296,50 +296,52 @@
    ])
 
 (defn posts [{:keys [app-state trigger-event]}]
-  [:table
-   [:tbody
-    (map (fn [{:keys [id points title created content author]}]
-           [:<> {:key id}
-            [:tr {:style {:line-height 1}}
-             [:td [:h1 {:style    {:margin "0px"
-                                   :cursor "pointer"}
-                        :on-click (fn [] (trigger-event {:name :post-selected :data {:page-id :post :slug id}}))
-                        } title]]]
-            [:tr {:style {:line-height 1 :padding-bottom "10px"}}
-             [:td {:style {:font-size "9pt" :color "gray"}}
-              [:span (str points " Points by " author)]
+  (let [posts (:posts app-state)]
+    (if (nil? posts)
+      "LOADING"
+      [:table
+       [:tbody
+        (map (fn [{:keys [id points title created content author]}]
+               [:<> {:key id}
+                [:tr {:style {:line-height 1}}
+                 [:td [:h1 {:style    {:margin "0px"
+                                       :cursor "pointer"}
+                            :on-click (fn [] (trigger-event {:name :post-selected :data {:page-id :post :slug id}}))
+                            } title]]]
+                [:tr {:style {:line-height 1 :padding-bottom "10px"}}
+                 [:td {:style {:font-size "9pt" :color "gray"}}
+                  [:span (str points " Points by " author)]
 
-              [:span {:style {:padding-left "10px"}} " | "]
-              [:span {:style {:padding-left "10px" :padding-right "10px"}}
-               [:span {:style    {:cursor              "pointer"
-                                  :font-size           "9pt"
-                                  :color               "gray"
-                                  :-webkit-user-select "none"
-                                  :-moz-user-select    "none"
-                                  :-ms-user-select     "none"
-                                  }
-                       :on-click (fn [] (trigger-event {:name :vote-up :data {:event-name :vote-down
-                                                                              :data       {:id id}}}))}
-                "▼"]
-               [:span {:style    {:cursor              "pointer"
-                                  :-webkit-user-select "none"
-                                  :-moz-user-select    "none"
-                                  :-ms-user-select     "none"
-                                  :font-size           "9pt"
-                                  :color               "gray"
-                                  }
-                       :on-click (fn []
-                                   (trigger-event {:name :vote-up :data {:event-name :vote-up
-                                                                         :data       {:id id}}}))}
-                "▲"]]
-              [:span {:style {:padding-left "10px"}} " | "]
-              [:span {:style {:padding-left "10px"}} created]
-              ]
-             ]
-            [:tr {:style {:height "25px"}}]]
-           ) (vals (get-in app-state [:data :state :posts])))]
-   ]
-  )
+                  [:span {:style {:padding-left "10px"}} " | "]
+                  [:span {:style {:padding-left "10px" :padding-right "10px"}}
+                   [:span {:style    {:cursor              "pointer"
+                                      :font-size           "9pt"
+                                      :color               "gray"
+                                      :-webkit-user-select "none"
+                                      :-moz-user-select    "none"
+                                      :-ms-user-select     "none"
+                                      }
+                           :on-click (fn [] (trigger-event {:name :vote-up :data {:event-name :vote-down
+                                                                                  :data       {:id id}}}))}
+                    "▼"]
+                   [:span {:style    {:cursor              "pointer"
+                                      :-webkit-user-select "none"
+                                      :-moz-user-select    "none"
+                                      :-ms-user-select     "none"
+                                      :font-size           "9pt"
+                                      :color               "gray"
+                                      }
+                           :on-click (fn []
+                                       (trigger-event {:name :vote-up :data {:event-name :vote-up
+                                                                             :data       {:id id}}}))}
+                    "▲"]]
+                  [:span {:style {:padding-left "10px"}} " | "]
+                  [:span {:style {:padding-left "10px"}} created]
+                  ]
+                 ]
+                [:tr {:style {:height "25px"}}]]
+               ) posts)]
+       ])))
 
 (defn portfolio
   [{:keys [app-state trigger-event]}]
@@ -408,12 +410,10 @@
                             :content  (get-in app-state [:post-template :content])
                             :created? false
                             :error    nil})]
-
     (wait-for :post-created :create-post (fn [data]
                                            (condp = (:status data)
                                              :success (r/rswap! input-atom merge {:created? true :error nil})
-                                             :error (r/rswap! input-atom merge {:created? false :error (:error data)})
-                                             )))
+                                             :error (r/rswap! input-atom merge {:created? false :error (:error data)}))))
     (fn []
       (let [maybe-settings (crumborn.core/valid-edn? (:settings @input-atom))]
         [:div {:style {:display "block" :height "100vh"}}
@@ -446,12 +446,12 @@
                                  }}]
 
          [:button
-          {:on-click (fn []
-                       (let [settings (:settings (deref input-atom))]
-                         (when (crumborn.core/valid-edn? settings)
-                           (trigger-event {:name :create-post
-                                           :data {:post (-> (clojure.edn/read-string settings)
-                                                            (assoc :content (:content @input-atom)))}}))))} "Create"]])))
+          {:on-click (debounce (fn []
+                                 (when maybe-settings
+                                   (trigger-event {:name :create-post
+                                                   :data {:post (-> maybe-settings
+                                                                    (assoc :content (:content @input-atom)))}}))) 250)}
+          "Create"]])))
   )
 
 (defn post
@@ -462,7 +462,7 @@
 
 (defn footer
   [{:keys [app-state wait-for]}]
-  ;(wait-for :post-created :footer (fn [d] (println "we are waiting in the footer also!!")))
+  (wait-for :post-created :footer (fn [d] (println "we are waiting in the footer also!!")))
   (fn []
     [:div {:style {:width           "100%"
                    :text-align      "center"

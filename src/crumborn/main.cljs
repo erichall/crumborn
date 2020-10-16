@@ -54,9 +54,10 @@
    :identity    nil
    :data        nil
    :visitors    nil
+   :posts       nil
    })
 
-(defonce consumers-atom (atom []))
+(defonce consumers-atom (atom {}))
 
 (defn publish-message
   [message]
@@ -64,20 +65,13 @@
 
 (defn wait-for
   [evt-name source callback-fn]
-  (swap! consumers-atom (fn [s]
-                          (map (fn [consumer]
-                                 (if (not (= (:source consumer) source))
-
-                                   )
-                                 ) s)
-                          {:evt-name evt-name :callback-fn callback-fn}))
+  (swap! consumers-atom assoc-in [evt-name source] callback-fn)
   (async/go-loop
     []
     (let [{:keys [event-name data]} (async/<! wait-for-channel)]
       (println @consumers-atom)
-      (doseq [{:keys [evt-name callback-fn]} @consumers-atom]
-        (when (= evt-name event-name)
-          (callback-fn data)))
+      (doseq [cb (vals (get @consumers-atom event-name))]
+        (cb data))
       (recur))))
 
 (def pages
@@ -85,8 +79,10 @@
                  :view crumborn.view.app/front-page}
    :resume      {:id   :resume
                  :view crumborn.view.app/resume}
-   :posts       {:id   :posts
-                 :view crumborn.view.app/posts}
+   :posts       {:id         :posts
+                 :view       crumborn.view.app/posts
+                 :prepare-fn (fn []
+                               (publish-message {:event-name :get-posts}))}
    :post        {:id          :post
                  :view        crumborn.view.app/post
                  :slug-prefix "posts/"}
@@ -162,6 +158,10 @@
                           (as-> page
                                 (async/put! page-channel page)))
 
+    :posts (do
+             (println "we get nothing?")
+             (swap! app-state-atom assoc :posts (:posts data)))
+
     :not-authenticated (swap! app-state-atom assoc :identity nil)
 
     :ping (publish-message {:event-name :pong})
@@ -225,12 +225,16 @@
                        (publish-message data))              ;; put the data back lol?
 
                      (ws/socket-is-connecting? socket)
-                     (publish-message data)                 ;; put the data back lol?
+                     (do
+                       (publish-message data))              ;; put the data back lol?
 
                      :else
                      (do
                        (ws/send-msg! (deref channel-atom) data)
-                       (recur))))))
+                       )
+                     )
+                   ;(recur)
+                   )))
 
 (defn app
   [app-state]
