@@ -1,6 +1,12 @@
 (ns crumborn.view.app
   (:require [crumborn.theme :refer [get-style is-dark-theme? theme-atom]]
-            [crumborn.core :refer [authenticated? loading? active-page-is? debounce]]
+            [crumborn.core :refer [authenticated?
+                                   loading?
+                                   active-page-is?
+                                   debounce
+                                   space->space
+                                   space->dash
+                                   dash->space]]
             [reagent.core :as r]
             [cljs.core.async :as async]
             ))
@@ -46,9 +52,8 @@
 (defn front-page
   [{:keys [trigger-event app-state]}]
   [:div {:style {:padding-top "20px"}}
-   [:p (get-in app-state [:data :state :content :front-page :intro])]
-   [:p (get-in app-state [:data :state :content :front-page :about])]
-   ])
+   [:p (get-in app-state [:pages :front-page :intro])]
+   [:p (get-in app-state [:pages :front-page :about])]])
 
 (defn dashboard
   [{:keys [trigger-event app-state]}]
@@ -296,17 +301,17 @@
    ])
 
 (defn posts [{:keys [app-state trigger-event]}]
-  (let [posts (:posts app-state)]
+  (let [posts (get-in app-state [:pages :posts :posts])]
     (if (nil? posts)
       "LOADING"
       [:table
        [:tbody
-        (map (fn [{:keys [id points title created content author]}]
+        (map (fn [{:keys [id points title date-created content author] :as p}]
                [:<> {:key id}
                 [:tr {:style {:line-height 1}}
                  [:td [:h1 {:style    {:margin "0px"
                                        :cursor "pointer"}
-                            :on-click (fn [] (trigger-event {:name :post-selected :data {:page-id :post :slug id}}))
+                            :on-click (fn [] (trigger-event {:name :post-selected :data {:page-id :post :slug (space->dash title)}}))
                             } title]]]
                 [:tr {:style {:line-height 1 :padding-bottom "10px"}}
                  [:td {:style {:font-size "9pt" :color "gray"}}
@@ -336,11 +341,11 @@
                                                                              :data       {:id id}}}))}
                     "▲"]]
                   [:span {:style {:padding-left "10px"}} " | "]
-                  [:span {:style {:padding-left "10px"}} created]
+                  [:span {:style {:padding-left "10px"}} date-created]
                   ]
                  ]
                 [:tr {:style {:height "25px"}}]]
-               ) posts)]
+               ) (vals posts))]
        ])))
 
 (defn portfolio
@@ -451,18 +456,22 @@
                                    (trigger-event {:name :create-post
                                                    :data {:post (-> maybe-settings
                                                                     (assoc :content (:content @input-atom)))}}))) 250)}
-          "Create"]])))
-  )
+          "Create"]]))))
 
 (defn post
   [{:keys [app-state]}]
   (let [slug (:active-slug app-state)
-        post (get-in app-state [:data :state :posts slug])] ;; TODO handle when we don't have the post in the state?
-    [:h1 (:title post)]))
+        error (get-in app-state [:pages :post :error])
+        post (get-in app-state [:pages :post :post])]
+    (cond
+      (some? error) [:h4 error]
+      (not= (dash->space slug) (:title post)) [:p "LOADING"]
+      :else
+      [:<>
+       [:h1 (:title post)]])))
 
 (defn footer
   [{:keys [app-state wait-for]}]
-  (wait-for :post-created :footer (fn [d] (println "we are waiting in the footer also!!")))
   (fn []
     [:div {:style {:width           "100%"
                    :text-align      "center"
@@ -478,7 +487,7 @@
   [:div {:on-click (fn [] (trigger-event {:name :page-selected :data {:page-id :front-page}}))
          :style    {:cursor "pointer"}}
    [:h1 {:style (get-style [:title])}
-    (get-in app-state [:data :state :content :header :title])]])
+    (get-in app-state [:misc :header :title])]])
 
 (defn app-component
   [{:keys [app-state trigger-event theme pages wait-for] :as args}]

@@ -12,7 +12,11 @@
                                    set-loading
                                    new-page?
                                    new-slug?
-                                   get-page]]
+                                   get-page
+                                   has-fact?
+                                   get-post
+                                   space->space
+                                   space->dash]]
             [crumborn.theme :refer [theme-atom is-dark-theme? get-style]]
             [crumborn.theme.light :as light-theme]
             [crumborn.theme.dark :as dark-theme]
@@ -52,9 +56,7 @@
    :active-slug (:slug (get-page-and-slug))
    :loading     true
    :identity    nil
-   :data        nil
    :visitors    nil
-   :posts       nil
    })
 
 (defonce consumers-atom (atom {}))
@@ -69,27 +71,48 @@
   (async/go-loop
     []
     (let [{:keys [event-name data]} (async/<! wait-for-channel)]
-      (println @consumers-atom)
       (doseq [cb (vals (get @consumers-atom event-name))]
         (cb data))
       (recur))))
 
 (def pages
-  {:front-page  {:id   :front-page
-                 :view crumborn.view.app/front-page}
-   :resume      {:id   :resume
-                 :view crumborn.view.app/resume}
+  {:front-page  {:id         :front-page
+                 :view       crumborn.view.app/front-page
+                 :prepare-fn (fn [& [{:keys [app-state]}]]
+                               (when-not (has-fact? app-state [:pages :front-page])
+                                 (publish-message {:event-name :front-page-facts})))}
+   :resume      {:id         :resume
+                 :view       crumborn.view.app/resume
+                 :prepare-fn (fn [& [{:keys [app-state]}]]
+                               (when-not (has-fact? app-state [:pages :resume])
+                                 (publish-message {:event-name :resume-facts})))}
    :posts       {:id         :posts
                  :view       crumborn.view.app/posts
-                 :prepare-fn (fn []
-                               (publish-message {:event-name :get-posts}))}
+                 :prepare-fn (fn [& [{:keys [app-state]}]]
+                               (when-not (has-fact? app-state [:pages :posts :posts])
+                                 (publish-message {:event-name :posts-facts})))}
    :post        {:id          :post
                  :view        crumborn.view.app/post
-                 :slug-prefix "posts/"}
-   :portfolio   {:id   :portfolio
-                 :view crumborn.view.app/portfolio}
-   :login       {:id   :login
-                 :view crumborn.view.app/login}
+                 :slug-prefix "posts/"
+                 :prepare-fn  (fn [& [{:keys [app-state page-data]}]]
+                                (let [slug (:slug page-data)
+                                      maybe-post (get-post app-state slug)]
+                                  (if maybe-post
+                                    (swap! app-state-atom merge {:pages {:post {:post  maybe-post
+                                                                                :error nil}}})
+                                    (do
+                                      (swap! app-state-atom merge {:pages {:post {:post  nil
+                                                                                  :error nil}}})
+                                      (publish-message {:event-name :post-facts
+                                                        :data       {:slug (space->dash slug)}})))))}
+   :portfolio   {:id         :portfolio
+                 :view       crumborn.view.app/portfolio
+                 :prepare-fn (fn [& _]
+                               (publish-message {:event-name :portfolio-facts}))}
+   :login       {:id         :login
+                 :view       crumborn.view.app/login
+                 :prepare-fn (fn [& _]
+                               (publish-message {:event-name :login-facts}))}
 
    ;; requires auth
    :create-post {:auth-fn (fn []
@@ -110,8 +133,9 @@
   [channel]
   (async/go-loop
     []
-    (let [{:keys [auth-fn prepare-fn slug slug-prefix id]} (async/<! channel)]
+    (let [{:keys [auth-fn prepare-fn slug slug-prefix id] :as page-data} (async/<! channel)]
 
+      ;; some random page ?!
       (when-not (contains? pages id)
         (swap! app-state-atom (fn [state]
                                 (assoc (assoc state :active-page :front-page) :active-slug nil)))
@@ -119,7 +143,8 @@
 
       ;; Do preparation if the view needs
       (when prepare-fn
-        (prepare-fn))
+        (prepare-fn {:page-data page-data
+                     :app-state @app-state-atom}))
 
       ;; if the page has an auth fn, call it and do nothing more
       ;; otherwise, activate the page or slug
@@ -128,17 +153,18 @@
         (do
           (swap! app-state-atom (fn [state]
                                   (-> (assoc state :active-page id)
-                                      (assoc :active-slug (when slug (if (keyword? slug) slug (keyword slug)))))))
-          (interop/set-hash! (if slug (str slug-prefix (name slug)) (name id))))))
+                                      (assoc :active-slug (when slug
+                                                            slug)))))
+          (interop/set-hash! (if slug
+                               (str slug-prefix (space->dash slug))
+                               (name id))))))
     (recur)))
 
 (defn channel-msg-handler
   [{:keys [event-name data]}]
   (condp = event-name
     :connected (do
-                 (swap! app-state-atom (fn [state]
-                                         (-> (assoc-in state [:data :state] (:state data))
-                                             (assoc :loading false))))
+                 (swap! app-state-atom merge (assoc (:state data) :loading false))
                  (swap! channel-atom assoc :id (:id data)))
 
     :re-hydrate (swap! app-state-atom assoc-in [:data :state] (:state data))
@@ -158,9 +184,7 @@
                           (as-> page
                                 (async/put! page-channel page)))
 
-    :posts (do
-             (println "we get nothing?")
-             (swap! app-state-atom assoc :posts (:posts data)))
+    :posts (swap! app-state-atom assoc :posts (:posts data))
 
     :not-authenticated (swap! app-state-atom assoc :identity nil)
 
@@ -169,9 +193,15 @@
     :page-count (swap! app-state-atom assoc :visitors (:visitors data))
 
     :post-template (swap! app-state-atom assoc :post-template (:template data))
-    :post-created (async/put! wait-for-channel {:wait-for-name :any
-                                                :event-name    :post-created
-                                                :data          data})
+    :post-created (async/put! wait-for-channel {:event-name :post-created
+                                                :data       data})
+
+    :front-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
+    :resume-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
+    :posts-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
+    :post-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
+    :portfolio-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
+    :login-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
 
     (log/debug "no matching clause for " event-name)))
 
@@ -179,9 +209,12 @@
 (defn handle-event!
   [{:keys [name data]}]
   (condp = name
-    :post-selected (when (new-slug? @app-state-atom (:slug data))
-                     (async/put! page-channel (-> (get pages (:page-id data))
-                                                  (assoc :slug (:slug data)))))
+    :post-selected (let [state (deref app-state-atom)
+                         acsd (when (some? (:active-slug state))
+                                (space->dash (str (:active-slug state))))]
+                     (when (new-slug? (assoc state :active-slug acsd) (:slug data))
+                       (async/put! page-channel (-> (get pages (:page-id data))
+                                                    (assoc :slug (:slug data))))))
     :page-selected (when (new-page? @app-state-atom (:page-id data))
                      (async/put! page-channel (get pages (:page-id data))))
     :toggle-theme (do
@@ -211,6 +244,11 @@
     (log/debug "Handle event has no clause for " name)
     ))
 
+(defn wait
+  [ms fn]
+  (js/setTimeout fn ms))
+
+
 (defn consume-messages!
   [channel]
   (async/go-loop []
@@ -222,19 +260,21 @@
                      (or (ws/socket-is-closed? socket) (ws/socket-is-closing? socket))
                      (do
                        (handle-event! {:name :reconnect})   ;; I guess this will be messed up if the server goes down
-                       (publish-message data))              ;; put the data back lol?
+                       (publish-message data)
+                       (recur))                             ;; put the data back lol?
 
                      (ws/socket-is-connecting? socket)
                      (do
-                       (publish-message data))              ;; put the data back lol?
+                       ;; wait for 150ms and hope we have a connection,
+                       ;; otherwise we need to think of something clever
+                       (js/setTimeout (fn []
+                                        (publish-message data)) 150)
+                       (recur))
 
                      :else
                      (do
                        (ws/send-msg! (deref channel-atom) data)
-                       )
-                     )
-                   ;(recur)
-                   )))
+                       (recur))))))
 
 (defn app
   [app-state]
@@ -283,7 +323,8 @@
   ;; initialize correct page...
   (let [{:keys [page slug]} (get-page-and-slug)]
     (if slug
-      (handle-event! {:name :post-selected :data {:slug slug}})
+      (handle-event! {:name :post-selected :data {:page-id :post
+                                                  :slug    slug}})
       (handle-event! {:name :page-selected :data {:page-id (if (and (contains? pages page)
                                                                     (not (:auth-fn (get pages page))))
                                                              page

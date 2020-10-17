@@ -21,8 +21,8 @@
    (let [[page slug] (-> (interop/get-hash event)
                          (str/replace #"#" "")
                          (str/split #"/"))]
-     {:page (if (empty? page) nil (keyword page))
-      :slug (if (empty? slug) nil (keyword slug))}))
+     {:page (when-not (empty? page) (keyword page))
+      :slug (when-not (empty? slug) slug)}))
   ([]
    (get-page-and-slug (clj->js {:target (interop/get-window)}))))
 
@@ -93,4 +93,32 @@
                   :else v)
                 "\n ")) "{\n " m)
     "}"))
+
+(defn has-fact?
+  [state path]
+  (boolean (get-in state path)))
+
+(defn space->space
+  [s]
+  (clojure.string/replace s #"%20" " "))
+
+(defn space->dash
+  [s]
+  (->
+    (clojure.string/replace s #"%20" "-")
+    (clojure.string/replace #" " "-")))
+
+(defn dash->space
+  [s]
+  (clojure.string/replace s #"-" " "))
+
+(defn get-post
+  "Get a post by name from the state"
+  [app-state slug]
+  (let [posts (vals (get-in app-state [:pages :posts :posts]))]
+    (when (some? posts)
+      (->
+        (filter (fn [{:keys [title]}]
+                  (= title (dash->space slug))) posts)
+        first))))
 
