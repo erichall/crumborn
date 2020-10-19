@@ -13,7 +13,7 @@
 
 
 (defn menu
-  [{:keys [trigger-event app-state]}]
+  [{:keys [trigger-event active-page authenticated? visitors]}]
   (let [goto (fn [page] (trigger-event {:name :page-selected :data {:page-id page}}))
         highlight-style {:border-bottom "1px solid black"}]
     [:div
@@ -22,19 +22,19 @@
       [:ul {:style (get-style [:navbar :ul])}
        [:li {:on-click (fn [] (goto :resume)) :style (get-style [:navbar :li]
                                                                 {:margin-left "0px"}
-                                                                (when (active-page-is? app-state :resume) highlight-style))}
+                                                                (when (= active-page :resume) highlight-style))}
         "Resume"]
        [:li {:on-click (fn [] (goto :posts)) :style (get-style [:navbar :li]
-                                                               (when (or (active-page-is? app-state :posts)
-                                                                         (active-page-is? app-state :post))
+                                                               (when (or (= active-page :posts)
+                                                                         (= active-page :post))
                                                                  highlight-style)
                                                                )}
         "Posts"]
-       [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li] (when (active-page-is? app-state :portfolio)
+       [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li] (when (= active-page :portfolio)
                                                                                    highlight-style))}
         "Portfolio"]
 
-       (when (authenticated? app-state)
+       (when authenticated?
          [:li {:on-click (fn [] (goto :dashboard)) :style (assoc (get-style [:navbar :li]) :float "right")} "Dashboard"])
 
        [:li {:on-click (fn [] (trigger-event {:name :toggle-theme}))
@@ -45,7 +45,7 @@
           )]
        [:li {:style (assoc (get-style [:navbar :li]) :float "right")}
         [:span {:title "Active visitors"}
-         (get app-state :visitors)]]
+         visitors]]
        ]]
      [:hr {:style {:margin-bottom "30px"}}]]))
 
@@ -316,7 +316,6 @@
                 [:tr {:style {:line-height 1 :padding-bottom "10px"}}
                  [:td {:style {:font-size "9pt" :color "gray"}}
                   [:span (str points " Points by " author)]
-
                   [:span {:style {:padding-left "10px"}} " | "]
                   [:span {:style {:padding-left "10px" :padding-right "10px"}}
                    [:span {:style    {:cursor              "pointer"
@@ -326,8 +325,9 @@
                                       :-moz-user-select    "none"
                                       :-ms-user-select     "none"
                                       }
-                           :on-click (fn [] (trigger-event {:name :vote-up :data {:event-name :vote-down
-                                                                                  :data       {:id id}}}))}
+                           :on-click (fn []
+                                       (trigger-event {:name :vote-down
+                                                       :data {:id id}}))}
                     "▼"]
                    [:span {:style    {:cursor              "pointer"
                                       :-webkit-user-select "none"
@@ -337,16 +337,14 @@
                                       :color               "gray"
                                       }
                            :on-click (fn []
-                                       (trigger-event {:name :vote-up :data {:event-name :vote-up
-                                                                             :data       {:id id}}}))}
+                                       (trigger-event {:name :vote-up
+                                                       :data {:id id}}))}
                     "▲"]]
                   [:span {:style {:padding-left "10px"}} " | "]
                   [:span {:style {:padding-left "10px"}} date-created]
                   ]
                  ]
-                [:tr {:style {:height "25px"}}]]
-               ) (vals posts))]
-       ])))
+                [:tr {:style {:height "25px"}}]]) (vals posts))]])))
 
 (defn portfolio
   [{:keys [app-state trigger-event]}]
@@ -408,17 +406,20 @@
        ])))
 
 (defn create-post
-  [{:keys [app-state trigger-event wait-for]}]
+  [{:keys [app-state trigger-event]}]
   (let [input-atom (r/atom {:settings (-> (get app-state :post-template)
                                           (dissoc :content)
                                           crumborn.core/map->pretty-string)
                             :content  (get-in app-state [:post-template :content])
                             :created? false
                             :error    nil})]
-    (wait-for :post-created :create-post (fn [data]
-                                           (condp = (:status data)
-                                             :success (r/rswap! input-atom merge {:created? true :error nil})
-                                             :error (r/rswap! input-atom merge {:created? false :error (:error data)}))))
+    (trigger-event {:name :subscribe
+                    :data {:event-name  :post-created
+                           :id          :create-post
+                           :callback-fn (fn [data]
+                                          (condp = (:status data)
+                                            :success (r/rswap! input-atom merge {:created? true :error nil})
+                                            :error (r/rswap! input-atom merge {:created? false :error (:error data)})))}})
     (fn []
       (let [maybe-settings (crumborn.core/valid-edn? (:settings @input-atom))]
         [:div {:style {:display "block" :height "100vh"}}
@@ -463,44 +464,70 @@
   (let [slug (:active-slug app-state)
         error (get-in app-state [:pages :post :error])
         post (get-in app-state [:pages :post :post])]
-    (cond
-      (some? error) [:h4 error]
-      (not= (dash->space slug) (:title post)) [:p "LOADING"]
-      :else
-      [:<>
-       [:h1 (:title post)]])))
+    [:div {:style {:flex " 1 0 auto"}}
+     (cond
+       (some? error) [:h4 error]
+       (not= (dash->space slug) (:title post)) [:p "LOADING"]
+       :else
+       [:<>
+        [:h1 {:style {:border "1px dotted red"}} (:title post)]])]))
 
 (defn footer
-  [{:keys [app-state wait-for]}]
+  []
   (fn []
-    [:div {:style {:width           "100%"
+    [:div {:style {
+                   :width           "100%"
                    :text-align      "center"
                    :height          "50px"
+                   :flex-shrink     0
                    :display         "flex"
                    :justify-content "center"
-                   :align-items     "center"}}
-     [:span
-      "e"]]))
+                   :align-items     "center"
+                   :flex-direction  "row"
+                   }}
+     [:span {:on-click (fn [] (let [anim (js/document.getElementById "dot")]
+                                (.beginElement anim)))
+             :style    {:margin-right "5px"
+                        :cursor       "pointer"
+                        :user-select  "none"}}
+      "e"]
+     [:svg {:height "50px" :width "60px"}
+      [:circle {:id    "rect"
+                :cx    10
+                :cy    26
+                :r     3
+                :style {:background "black"}}
+       [:animate {:id            "dot"
+                  :attributeName "cy"
+                  :from          26
+                  :to            15
+                  :values        "26; 20; 18; 15"
+                  :keyTimes      "0; 0.5; 0.8; 1"
+                  :dur           "1s"
+                  }]]]]))
 
 (defn header
-  [{:keys [app-state trigger-event]}]
+  [{:keys [trigger-event title]}]
   [:div {:on-click (fn [] (trigger-event {:name :page-selected :data {:page-id :front-page}}))
          :style    {:cursor "pointer"}}
    [:h1 {:style (get-style [:title])}
-    (get-in app-state [:misc :header :title])]])
+    title]])
 
 (defn app-component
-  [{:keys [app-state trigger-event theme pages wait-for] :as args}]
-  [:<>
-   (if (loading? app-state)
-     [:h1 "Spinning"]
-     [:<>
-      [header args]
-      [menu args]
+  [{:keys [app-state trigger-event theme pages]}]
+  (if (loading? app-state)
+    [:h1 "Spinning"]
+    [:<>
+     [header {:trigger-event trigger-event
+              :title         (get-in app-state [:misc :header :title])}]
+     [menu {:trigger-event  trigger-event
+            :visitors       (:visitors app-state)
+            :active-page    (:active-page app-state)
+            :authenticated? (authenticated? app-state)}]
+     [:div {:style {:flex 1}}
       [(get-in pages [(:active-page app-state) :view]) {:app-state     app-state
                                                         :trigger-event trigger-event
-                                                        :theme         theme
-                                                        :wait-for      wait-for}]
-      [footer args]
-      ])
-   ])
+                                                        :theme         theme}]]
+     [footer]
+     ])
+  )

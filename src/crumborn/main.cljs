@@ -30,7 +30,7 @@
 
 (def message-channel (async/chan))
 (def page-channel (async/chan))
-(def wait-for-channel (async/chan))
+(def subscription-channel (async/chan))
 
 (defonce app-state-atom (atom nil))
 (defonce channel-atom (atom {:channel nil
@@ -56,8 +56,7 @@
    :active-slug (:slug (get-page-and-slug))
    :loading     true
    :identity    nil
-   :visitors    nil
-   })
+   :visitors    nil})
 
 (defonce consumers-atom (atom {}))
 
@@ -65,12 +64,12 @@
   [message]
   (async/put! message-channel message))
 
-(defn wait-for
-  [evt-name source callback-fn]
-  (swap! consumers-atom assoc-in [evt-name source] callback-fn)
+(defn subscribe
+  [{:keys [event-name id callback-fn]}]
+  (swap! consumers-atom assoc-in [event-name id] callback-fn)
   (async/go-loop
     []
-    (let [{:keys [event-name data]} (async/<! wait-for-channel)]
+    (let [{:keys [event-name data]} (async/<! subscription-channel)]
       (doseq [cb (vals (get @consumers-atom event-name))]
         (cb data))
       (recur))))
@@ -193,8 +192,8 @@
     :page-count (swap! app-state-atom assoc :visitors (:visitors data))
 
     :post-template (swap! app-state-atom assoc :post-template (:template data))
-    :post-created (async/put! wait-for-channel {:event-name :post-created
-                                                :data       data})
+    :post-created (async/put! subscription-channel {:event-name :post-created
+                                                    :data       data})
 
     :front-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
     :resume-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
@@ -230,8 +229,10 @@
     :channel-received-msg (channel-msg-handler data)
 
     :publish-message (publish-message data)
-    :vote-up (publish-message data)
-    :vote-down (publish-message data)
+    :vote-up (publish-message {:event-name :vote-up
+                               :data       {:id (:id data)}})
+    :vote-down (publish-message {:event-name :vote-down
+                                 :data       {:id (:id data)}})
     :page-count-requested (publish-message data)
     :create-post (publish-message {:event-name :create-post
                                    :data       data})
@@ -240,6 +241,8 @@
                  (reset! channel-atom {:channel nil
                                        :id      nil})
                  (ws/make-websocket! (str (get-ws-url) "/api/ws/") handle-event!))
+
+    :subscribe (subscribe data)
     ;; else
     (log/debug "Handle event has no clause for " name)
     ))
@@ -281,7 +284,7 @@
   [app-component {:pages         pages
                   :app-state     app-state
                   :trigger-event handle-event!
-                  :wait-for      wait-for}])
+                  :subscribe     subscribe}])
 (defn render
   [app-state]
   (reagent/render-component [#'app app-state] (interop/get-element-by-id "app")))
