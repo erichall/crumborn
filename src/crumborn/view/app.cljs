@@ -470,7 +470,7 @@
        (not= (dash->space slug) (:title post)) [:p "LOADING"]
        :else
        [:<>
-        [:h1 {:style {:border "1px dotted red"}} (:title post)]])]))
+        [:h1 (:title post)]])]))
 
 (defn footer
   []
