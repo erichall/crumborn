@@ -33,8 +33,11 @@
 (def subscription-channel (async/chan))
 
 (defonce app-state-atom (atom nil))
-(defonce channel-atom (atom {:channel nil
-                             :id      nil}))
+(defonce channel-atom (atom {:channel                  nil
+                             :id                       nil
+                             :connection-attempts      0
+                             :max-reconnection-attemps 10
+                             }))
 
 (defn make-mutation-channel
   [node]
@@ -238,11 +241,13 @@
                                    :data       data})
 
     :reconnect (do
-                 (reset! channel-atom {:channel nil
-                                       :id      nil})
+                 (swap! channel-atom merge {:channel nil
+                                            :id      nil})
                  (ws/make-websocket! (str (get-ws-url) "/api/ws/") handle-event!))
 
     :subscribe (subscribe data)
+
+    :ws-closed (log/debug (:message data))
     ;; else
     (log/debug "Handle event has no clause for " name)
     ))
@@ -263,15 +268,33 @@
                      (or (ws/socket-is-closed? socket) (ws/socket-is-closing? socket))
                      (do
                        (handle-event! {:name :reconnect})   ;; I guess this will be messed up if the server goes down
-                       (publish-message data)
-                       (recur))                             ;; put the data back lol?
+                       (js/setTimeout (fn []
+                                        (publish-message data)
+                                        (when-not (ws/socket-is-open? (:channel (deref channel-atom)))
+                                          (swap! channel-atom update :connection-attempts inc))) 500)
+
+                       (let [{:keys [connection-attempts max-reconnection-attemps]} (deref channel-atom)]
+                         (if (= connection-attempts max-reconnection-attemps)
+                           (handle-event! {:name :ws-closed :data {:message "Max connection attempts reached.."}})
+                           (recur))))
+
+                     (nil? socket)
+                     (do
+                       (js/setTimeout (fn []
+                                        (publish-message data)
+                                        (when-not (ws/socket-is-open? (:channel (deref channel-atom)))
+                                          (swap! channel-atom update :connection-attempts inc))) 500)
+
+                       (let [{:keys [connection-attempts max-reconnection-attemps]} (deref channel-atom)]
+                         (if (= connection-attempts max-reconnection-attemps)
+                           (handle-event! {:name :ws-closed :data {:message "Max connection attempts reached.."}})
+                           (recur))))
 
                      (ws/socket-is-connecting? socket)
                      (do
                        ;; wait for 150ms and hope we have a connection,
                        ;; otherwise we need to think of something clever
-                       (js/setTimeout (fn []
-                                        (publish-message data)) 150)
+                       (js/setTimeout (fn [] (publish-message data)) 150)
                        (recur))
 
                      :else
