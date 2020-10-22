@@ -248,6 +248,7 @@
     :subscribe (subscribe data)
 
     :ws-closed (log/debug (:message data))
+
     ;; else
     (log/debug "Handle event has no clause for " name)
     ))
@@ -271,7 +272,7 @@
                        (js/setTimeout (fn []
                                         (publish-message data)
                                         (when-not (ws/socket-is-open? (:channel (deref channel-atom)))
-                                          (swap! channel-atom update :connection-attempts inc))) 500)
+                                          (swap! channel-atom update :connection-attempts inc))) 1000)
 
                        (let [{:keys [connection-attempts max-reconnection-attemps]} (deref channel-atom)]
                          (if (= connection-attempts max-reconnection-attemps)
@@ -283,7 +284,7 @@
                        (js/setTimeout (fn []
                                         (publish-message data)
                                         (when-not (ws/socket-is-open? (:channel (deref channel-atom)))
-                                          (swap! channel-atom update :connection-attempts inc))) 500)
+                                          (swap! channel-atom update :connection-attempts inc))) 1000)
 
                        (let [{:keys [connection-attempts max-reconnection-attemps]} (deref channel-atom)]
                          (if (= connection-attempts max-reconnection-attemps)
