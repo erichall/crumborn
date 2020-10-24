@@ -50,10 +50,10 @@
      [:hr {:style {:margin-bottom "30px"}}]]))
 
 (defn front-page
-  [{:keys [page-state app-state]}]
+  [{:keys [page-state]}]
   [:div {:style {:padding-top "20px"}}
-   [:p (get-in app-state [:intro])]
-   [:p (get-in app-state [:about])]])
+   [:p (get-in page-state [:intro])]
+   [:p (get-in page-state [:about])]])
 
 (defn dashboard
   [{:keys [trigger-event]}]

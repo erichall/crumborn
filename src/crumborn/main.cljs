@@ -102,11 +102,11 @@
                                 (let [slug (:slug page-data)
                                       maybe-post (get-post app-state slug)]
                                   (if maybe-post
-                                    (swap! app-state-atom merge {:pages {:post {:post  maybe-post
-                                                                                :error nil}}})
+                                    (swap! app-state-atom assoc-in [:pages :post] {:post  maybe-post
+                                                                                   :error nil})
                                     (do
-                                      (swap! app-state-atom merge {:pages {:post {:post  nil
-                                                                                  :error nil}}})
+                                      (swap! app-state-atom assoc-in [:pages :post] {:post  nil
+                                                                                     :error nil})
                                       (publish-message {:event-name :post-facts
                                                         :data       {:slug (space->dash slug)}})))))}
    :portfolio   {:id         :portfolio
@@ -174,7 +174,6 @@
 
 (defn channel-msg-handler
   [{:keys [event-name data]}]
-  (println event-name)
   (condp = event-name
     :connected (do
                  (swap! app-state-atom merge (assoc (:state data) :loading false))
@@ -360,8 +359,6 @@
   (add-watch app-state-atom
              :game-loop
              (fn [_ _ os ns]
-
-               (cljs.pprint/pprint ns)
 
                ;; is it possible to only rerender on these premises?
                (cond

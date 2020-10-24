@@ -129,11 +129,9 @@
                     {:a {:b "data"}
                      :c {:d "data"}})))}
   [m paths data]
-  (reduce (fn [m path]
-            (assoc-in m path data)) m paths))
+  (reduce (fn [m path] (assoc-in m path data)) m paths))
 
 (defn change-fact
   [state {:keys [paths fact]}]
-  (assocs-in state paths fact)
-  )
+  (assocs-in state paths fact))
 
