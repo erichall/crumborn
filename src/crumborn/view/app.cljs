@@ -50,13 +50,13 @@
      [:hr {:style {:margin-bottom "30px"}}]]))
 
 (defn front-page
-  [{:keys [trigger-event app-state]}]
+  [{:keys [page-state app-state]}]
   [:div {:style {:padding-top "20px"}}
-   [:p (get-in app-state [:pages :front-page :intro])]
-   [:p (get-in app-state [:pages :front-page :about])]])
+   [:p (get-in app-state [:intro])]
+   [:p (get-in app-state [:about])]])
 
 (defn dashboard
-  [{:keys [trigger-event app-state]}]
+  [{:keys [trigger-event]}]
   [:div
    [:h1 "Dashboard"]
    [:p {:on-click (fn [] (trigger-event {:name :page-selected :data {:page-id :create-post}}))} "Write!"]
@@ -300,8 +300,8 @@
      ]]
    ])
 
-(defn posts [{:keys [app-state trigger-event]}]
-  (let [posts (get-in app-state [:pages :posts :posts])]
+(defn posts [{:keys [page-state trigger-event]}]
+  (let [posts (get-in page-state [:posts])]
     (if (nil? posts)
       "LOADING"
       [:table
@@ -347,7 +347,7 @@
                 [:tr {:style {:height "25px"}}]]) (vals posts))]])))
 
 (defn portfolio
-  [{:keys [app-state trigger-event]}]
+  [{:keys [trigger-event]}]
   [:table
    [:tbody
     (map (fn [{:keys [title text tech date img]}]
@@ -406,11 +406,12 @@
        ])))
 
 (defn create-post
-  [{:keys [app-state trigger-event]}]
-  (let [input-atom (r/atom {:settings (-> (get app-state :post-template)
+  [{:keys [page-state
+           trigger-event]}]
+  (let [input-atom (r/atom {:settings (-> (get page-state :template)
                                           (dissoc :content)
                                           crumborn.core/map->pretty-string)
-                            :content  (get-in app-state [:post-template :content])
+                            :content  (get-in page-state [:template :content])
                             :created? false
                             :error    nil})]
     (trigger-event {:name :subscribe
@@ -457,20 +458,28 @@
                                    (trigger-event {:name :create-post
                                                    :data {:post (-> maybe-settings
                                                                     (assoc :content (:content @input-atom)))}}))) 250)}
-          "Create"]]))))
+          "Create"]]))
+    ))
 
 (defn post
-  [{:keys [app-state]}]
-  (let [slug (:active-slug app-state)
-        error (get-in app-state [:pages :post :error])
-        post (get-in app-state [:pages :post :post])]
+  [{:keys [page-state active-slug]}]
+  (let [slug active-slug
+        error (get-in page-state [:error])
+        post (get-in page-state [:post])]
     [:div {:style {:flex " 1 0 auto"}}
      (cond
        (some? error) [:h4 error]
        (not= (dash->space slug) (:title post)) [:p "LOADING"]
        :else
        [:<>
-        [:h1 (:title post)]])]))
+        [:h1 (:title post)]
+        [:div {:style {:display         "flex"
+                       :flex-direction  "row"
+                       :justify-content "space-between"}}
+         [:span (:date-created post)]
+         [:span (:points post)]]
+
+        ])]))
 
 (defn footer
   []
@@ -525,9 +534,11 @@
             :active-page    (:active-page app-state)
             :authenticated? (authenticated? app-state)}]
      [:div {:style {:flex 1}}
-      [(get-in pages [(:active-page app-state) :view]) {:app-state     app-state
+      [(get-in pages [(:active-page app-state) :view]) {:page-state    (get-in app-state [:pages (:active-page app-state)])
                                                         :trigger-event trigger-event
-                                                        :theme         theme}]]
+                                                        :theme         theme
+                                                        :active-slug   (:active-slug app-state)}]]
+
      [footer]
      ])
   )

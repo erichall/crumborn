@@ -1,5 +1,6 @@
 (ns crumborn.core
   (:require [clojure.string :as str]
+            [clojure.test :as t]
             [crumborn.interop :as interop])
   (:import [goog.async Debouncer]))
 
@@ -121,4 +122,18 @@
         (filter (fn [{:keys [title]}]
                   (= title (dash->space slug))) posts)
         first))))
+
+(defn assocs-in
+  {:test (fn []
+           (t/is (= (assocs-in {} [[:a :b] [:c :d]] "data")
+                    {:a {:b "data"}
+                     :c {:d "data"}})))}
+  [m paths data]
+  (reduce (fn [m path]
+            (assoc-in m path data)) m paths))
+
+(defn change-fact
+  [state {:keys [paths fact]}]
+  (assocs-in state paths fact)
+  )
 

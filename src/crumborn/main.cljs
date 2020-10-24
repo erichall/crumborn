@@ -16,7 +16,9 @@
                                    has-fact?
                                    get-post
                                    space->space
-                                   space->dash]]
+                                   space->dash
+                                   change-fact
+                                   assocs-in]]
             [crumborn.theme :refer [theme-atom is-dark-theme? get-style]]
             [crumborn.theme.light :as light-theme]
             [crumborn.theme.dark :as dark-theme]
@@ -117,18 +119,22 @@
                                (publish-message {:event-name :login-facts}))}
 
    ;; requires auth
-   :create-post {:auth-fn (fn []
-                            (publish-message {:event-name :page-selected
-                                              :data       {:page  :create-post
-                                                           :token (get-identitiy (deref app-state-atom))}}))
-                 :id      :create-post
-                 :view    crumborn.view.app/create-post}
-   :dashboard   {:auth-fn (fn []
-                            (publish-message {:event-name :page-selected
-                                              :data       {:page  :dashboard
-                                                           :token (get-identitiy (deref app-state-atom))}}))
-                 :id      :dashboard
-                 :view    crumborn.view.app/dashboard}})
+   :create-post {:auth-fn    (fn []
+                               (publish-message {:event-name :page-selected
+                                                 :data       {:page  :create-post
+                                                              :token (get-identitiy (deref app-state-atom))}}))
+                 :prepare-fn (fn []
+                               (publish-message {:event-name :create-post-facts}))
+                 :id         :create-post
+                 :view       crumborn.view.app/create-post}
+   :dashboard   {:auth-fn    (fn []
+                               (publish-message {:event-name :page-selected
+                                                 :data       {:page  :dashboard
+                                                              :token (get-identitiy (deref app-state-atom))}}))
+                 :prepare-fn (fn []
+                               (publish-message {:event-name :dashboard-facts}))
+                 :id         :dashboard
+                 :view       crumborn.view.app/dashboard}})
 
 (defn consume-pages!
   "Async rendering of pages"
@@ -143,10 +149,7 @@
                                 (assoc (assoc state :active-page :front-page) :active-slug nil)))
         (recur))
 
-      ;; Do preparation if the view needs
-      (when prepare-fn
-        (prepare-fn {:page-data page-data
-                     :app-state @app-state-atom}))
+
 
       ;; if the page has an auth fn, call it and do nothing more
       ;; otherwise, activate the page or slug
@@ -159,11 +162,19 @@
                                                             slug)))))
           (interop/set-hash! (if slug
                                (str slug-prefix (space->dash slug))
-                               (name id))))))
+                               (name id)))))
+
+      ;; Do preparation if the view needs
+      (when (and prepare-fn (not auth-fn))
+        (prepare-fn {:page-data page-data
+                     :app-state @app-state-atom}))
+
+      )
     (recur)))
 
 (defn channel-msg-handler
   [{:keys [event-name data]}]
+  (println event-name)
   (condp = event-name
     :connected (do
                  (swap! app-state-atom merge (assoc (:state data) :loading false))
@@ -198,12 +209,16 @@
     :post-created (async/put! subscription-channel {:event-name :post-created
                                                     :data       data})
 
-    :front-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
-    :resume-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
-    :posts-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
-    :post-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
-    :portfolio-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
-    :login-page-facts (swap! app-state-atom assoc-in (:path data) (:fact data))
+    :front-page-facts (swap! app-state-atom change-fact data)
+    :resume-page-facts (swap! app-state-atom change-fact data)
+    :posts-page-facts (swap! app-state-atom change-fact data)
+    :post-page-facts (swap! app-state-atom change-fact data)
+    :portfolio-page-facts (swap! app-state-atom change-fact data)
+    :login-page-facts (swap! app-state-atom change-fact data)
+    :create-post-facts (swap! app-state-atom change-fact data)
+    :dashboard-page-facts (swap! app-state-atom change-fact data)
+
+    :fact-change (swap! app-state-atom change-fact data)
 
     (log/debug "no matching clause for " event-name)))
 
@@ -272,7 +287,7 @@
                        (js/setTimeout (fn []
                                         (publish-message data)
                                         (when-not (ws/socket-is-open? (:channel (deref channel-atom)))
-                                          (swap! channel-atom update :connection-attempts inc))) 1000)
+                                          (swap! channel-atom update :connection-attempts inc))) 150)
 
                        (let [{:keys [connection-attempts max-reconnection-attemps]} (deref channel-atom)]
                          (if (= connection-attempts max-reconnection-attemps)
@@ -284,7 +299,7 @@
                        (js/setTimeout (fn []
                                         (publish-message data)
                                         (when-not (ws/socket-is-open? (:channel (deref channel-atom)))
-                                          (swap! channel-atom update :connection-attempts inc))) 1000)
+                                          (swap! channel-atom update :connection-attempts inc))) 150)
 
                        (let [{:keys [connection-attempts max-reconnection-attemps]} (deref channel-atom)]
                          (if (= connection-attempts max-reconnection-attemps)
@@ -344,8 +359,20 @@
 (when (nil? (deref app-state-atom))
   (add-watch app-state-atom
              :game-loop
-             (fn [_ _ _ new-value]
-               (render new-value)))
+             (fn [_ _ os ns]
+
+               (cljs.pprint/pprint ns)
+
+               ;; is it possible to only rerender on these premises?
+               (cond
+                 (not= (:active-slug os) (:active-slug ns)) (render ns)
+
+                 (not= (:active-page os) (:active-page ns)) (render ns)
+
+                 (not= (get-in os [:pages (:active-page os)]) (get-in ns [:pages (:active-page ns)])) (render ns)
+
+                 :else nil                                  ;; this will cause some horrendous bugs
+                 )))
 
   ;; initialize correct page...
   (let [{:keys [page slug]} (get-page-and-slug)]
