@@ -2,6 +2,7 @@
   (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require [reagent.core :as reagent]
             [taoensso.timbre :as log]
+            [reagent.core :as r]
             [crumborn.view.app :refer [app-component]]
             [crumborn.interop :as interop]
             [crumborn.core :refer [debounce
@@ -361,15 +362,17 @@
              (fn [_ _ os ns]
 
                ;; is it possible to only rerender on these premises?
-               (cond
-                 (not= (:active-slug os) (:active-slug ns)) (render ns)
-
-                 (not= (:active-page os) (:active-page ns)) (render ns)
-
-                 (not= (get-in os [:pages (:active-page os)]) (get-in ns [:pages (:active-page ns)])) (render ns)
-
-                 :else nil                                  ;; this will cause some horrendous bugs
-                 )))
+               ;(cond
+               ;  (not= (:active-slug os) (:active-slug ns)) (render ns)
+               ;
+               ;  (not= (:active-page os) (:active-page ns)) (render ns)
+               ;
+               ;  (not= (get-in os [:pages (:active-page os)]) (get-in ns [:pages (:active-page ns)])) (render ns)
+               ;
+               ;  :else nil                                  ;; this will cause some horrendous bugs
+               ;  )
+               (render ns)
+               ))
 
   ;; initialize correct page...
   (let [{:keys [page slug]} (get-page-and-slug)]
