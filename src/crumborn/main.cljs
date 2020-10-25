@@ -35,7 +35,7 @@
 (def page-channel (async/chan))
 (def subscription-channel (async/chan))
 
-(defonce app-state-atom (atom nil))
+(defonce app-state-atom (r/atom nil))
 (defonce channel-atom (atom {:channel                  nil
                              :id                       nil
                              :connection-attempts      0
@@ -146,21 +146,19 @@
 
       ;; some random page ?!
       (when-not (contains? pages id)
-        (swap! app-state-atom (fn [state]
-                                (assoc (assoc state :active-page :front-page) :active-slug nil)))
+        (r/rswap! app-state-atom (fn [state]
+                                   (assoc (assoc state :active-page :front-page) :active-slug nil)))
         (recur))
-
-
 
       ;; if the page has an auth fn, call it and do nothing more
       ;; otherwise, activate the page or slug
       (if auth-fn
         (auth-fn)
         (do
-          (swap! app-state-atom (fn [state]
-                                  (-> (assoc state :active-page id)
-                                      (assoc :active-slug (when slug
-                                                            slug)))))
+          (r/rswap! app-state-atom (fn [state]
+                                     (-> (assoc state :active-page id)
+                                         (assoc :active-slug (when slug
+                                                               slug)))))
           (interop/set-hash! (if slug
                                (str slug-prefix (space->dash slug))
                                (name id)))))
@@ -168,28 +166,24 @@
       ;; Do preparation if the view needs
       (when (and prepare-fn (not auth-fn))
         (prepare-fn {:page-data page-data
-                     :app-state @app-state-atom}))
-
-      )
+                     :app-state @app-state-atom})))
     (recur)))
 
 (defn channel-msg-handler
   [{:keys [event-name data]}]
   (condp = event-name
     :connected (do
-                 (swap! app-state-atom merge (assoc (:state data) :loading false))
+                 (r/rswap! app-state-atom merge (assoc (:state data) :loading false))
                  (swap! channel-atom assoc :id (:id data)))
 
-    :re-hydrate (swap! app-state-atom assoc-in [:data :state] (:state data))
-
-    :authenticate-success (do (swap! app-state-atom (fn [state]
-                                                      (-> (assoc state :identity (:token data))
-                                                          (assoc :loading false))))
+    :authenticate-success (do (r/rswap! app-state-atom (fn [state]
+                                                         (-> (assoc state :identity (:token data))
+                                                             (assoc :loading false))))
                               (async/put! page-channel (get-page pages :dashboard))
                               (publish-message {:event-name :post-template}))
-    :authenticate-fail (swap! app-state-atom (fn [state]
-                                               (-> (assoc state :identity nil)
-                                                   (set-loading false))))
+    :authenticate-fail (r/rswap! app-state-atom (fn [state]
+                                                  (-> (assoc state :identity nil)
+                                                      (set-loading false))))
 
     ;; remove the auth fn if we are authenticated
     :is-authenticated (-> (get-page pages (:page data))
@@ -203,22 +197,22 @@
 
     :ping (publish-message {:event-name :pong})
 
-    :page-count (swap! app-state-atom assoc :visitors (:visitors data))
+    :page-count (r/rswap! app-state-atom assoc :visitors (:visitors data))
 
     :post-template (swap! app-state-atom assoc :post-template (:template data))
     :post-created (async/put! subscription-channel {:event-name :post-created
                                                     :data       data})
 
-    :front-page-facts (swap! app-state-atom change-fact data)
-    :resume-page-facts (swap! app-state-atom change-fact data)
-    :posts-page-facts (swap! app-state-atom change-fact data)
-    :post-page-facts (swap! app-state-atom change-fact data)
-    :portfolio-page-facts (swap! app-state-atom change-fact data)
-    :login-page-facts (swap! app-state-atom change-fact data)
-    :create-post-facts (swap! app-state-atom change-fact data)
-    :dashboard-page-facts (swap! app-state-atom change-fact data)
+    :front-page-facts (r/rswap! app-state-atom change-fact data)
+    :resume-page-facts (r/rswap! app-state-atom change-fact data)
+    :posts-page-facts (r/rswap! app-state-atom change-fact data)
+    :post-page-facts (r/rswap! app-state-atom change-fact data)
+    :portfolio-page-facts (r/rswap! app-state-atom change-fact data)
+    :login-page-facts (r/rswap! app-state-atom change-fact data)
+    :create-post-facts (r/rswap! app-state-atom change-fact data)
+    :dashboard-page-facts (r/rswap! app-state-atom change-fact data)
 
-    :fact-change (swap! app-state-atom change-fact data)
+    :fact-change (r/rswap! app-state-atom change-fact data)
 
     (log/debug "no matching clause for " event-name)))
 
@@ -265,13 +259,11 @@
     :ws-closed (log/debug (:message data))
 
     ;; else
-    (log/debug "Handle event has no clause for " name)
-    ))
+    (log/debug "Handle event has no clause for " name)))
 
 (defn wait
   [ms fn]
   (js/setTimeout fn ms))
-
 
 (defn consume-messages!
   [channel]
@@ -320,10 +312,12 @@
 
 (defn app
   [app-state]
-  [app-component {:pages         pages
-                  :app-state     app-state
-                  :trigger-event handle-event!
-                  :subscribe     subscribe}])
+  [app-component {:pages          pages
+                  :app-state      app-state
+                  :app-state-atom app-state-atom
+                  :trigger-event  handle-event!
+                  :subscribe      subscribe}])
+
 (defn render
   [app-state]
   (reagent/render-component [#'app app-state] (interop/get-element-by-id "app")))
@@ -343,7 +337,9 @@
                                (handle-event! {:name :post-selected :data {:slug    slug
                                                                            :page-id :post}})
                                (when (contains? pages page)
-                                 (handle-event! {:name :page-selected :data {:page-id page}}))))))
+                                 (handle-event! {:name :page-selected :data {:page-id page}}))
+
+                               ))))
 
 ;; Listene to app wide content changes in html TODO
 ;(let [mutation-channel (make-mutation-channel (interop/get-element-by-id "app"))]
@@ -357,22 +353,6 @@
 (consume-messages! message-channel)
 
 (when (nil? (deref app-state-atom))
-  (add-watch app-state-atom
-             :game-loop
-             (fn [_ _ os ns]
-
-               ;; is it possible to only rerender on these premises?
-               ;(cond
-               ;  (not= (:active-slug os) (:active-slug ns)) (render ns)
-               ;
-               ;  (not= (:active-page os) (:active-page ns)) (render ns)
-               ;
-               ;  (not= (get-in os [:pages (:active-page os)]) (get-in ns [:pages (:active-page ns)])) (render ns)
-               ;
-               ;  :else nil                                  ;; this will cause some horrendous bugs
-               ;  )
-               (render ns)
-               ))
 
   ;; initialize correct page...
   (let [{:keys [page slug]} (get-page-and-slug)]
@@ -383,8 +363,8 @@
                                                                     (not (:auth-fn (get pages page))))
                                                              page
                                                              :front-page)}}))
-
-    (reset! app-state-atom initial-state)))
+    (r/rswap! app-state-atom (fn [_] initial-state))
+    (render (deref app-state-atom))))
 
 (when (nil? (deref theme-atom))
   (add-watch theme-atom

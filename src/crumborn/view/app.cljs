@@ -13,7 +13,7 @@
 
 
 (defn menu
-  [{:keys [trigger-event active-page authenticated? visitors]}]
+  [{:keys [trigger-event active-page authenticated? visitors app-state-atom]}]
   (let [goto (fn [page] (trigger-event {:name :page-selected :data {:page-id page}}))
         highlight-style {:border-bottom "1px solid black"}]
     [:div
@@ -45,12 +45,12 @@
           )]
        [:li {:style (assoc (get-style [:navbar :li]) :float "right")}
         [:span {:title "Active visitors"}
-         visitors]]
+         (get @app-state-atom :visitors)]]
        ]]
      [:hr {:style {:margin-bottom "30px"}}]]))
 
 (defn front-page
-  [{:keys [page-state]}]
+  [{:keys [page-state app-state-atom]}]
   [:div {:style {:padding-top "20px"}}
    [:p (get-in page-state [:intro])]
    [:p (get-in page-state [:about])]])
@@ -347,7 +347,7 @@
                 [:tr {:style {:height "25px"}}]]) (vals posts))]])))
 
 (defn portfolio
-  [{:keys [trigger-event]}]
+  [{:keys [trigger-event app-state-atom]}]
   [:table
    [:tbody
     (map (fn [{:keys [title text tech date img]}]
@@ -402,7 +402,8 @@
 
 (defn create-post
   [{:keys [page-state
-           trigger-event]}]
+           trigger-event
+           app-state-atom]}]
   (let [input-atom (r/atom {:settings (-> (get page-state :template)
                                           (dissoc :content)
                                           crumborn.core/map->pretty-string)
@@ -518,22 +519,25 @@
     title]])
 
 (defn app-component
-  [{:keys [app-state trigger-event theme pages]}]
-  (if (loading? app-state)
+  [{:keys [app-state-atom trigger-event theme pages]}]
+  (if (loading? @app-state-atom)
     [:h1 "Spinning"]
     [:<>
-     [header {:trigger-event trigger-event
-              :title         (get-in app-state [:misc :header :title])}]
+     [header {:trigger-event  trigger-event
+              :app-state-atom app-state-atom
+              :title          (get-in @app-state-atom [:misc :header :title])}]
      [menu {:trigger-event  trigger-event
-            :visitors       (:visitors app-state)
-            :active-page    (:active-page app-state)
-            :authenticated? (authenticated? app-state)}]
+            :app-state-atom app-state-atom
+            :visitors       (:visitors @app-state-atom)
+            :active-page    (:active-page @app-state-atom)
+            :authenticated? (authenticated? @app-state-atom)}]
      [:div {:style {:flex 1}}
-      [(get-in pages [(:active-page app-state) :view]) {:page-state    (get-in app-state [:pages (:active-page app-state)])
-                                                        :trigger-event trigger-event
-                                                        :theme         theme
-                                                        :active-slug   (:active-slug app-state)}]]
-
+      [(get-in pages [(:active-page @app-state-atom) :view]) {:page-state     (get-in @app-state-atom [:pages (:active-page @app-state-atom)])
+                                                              :app-state-atom app-state-atom
+                                                              :trigger-event  trigger-event
+                                                              :theme          theme
+                                                              :active-page    (:active-page @app-state-atom)
+                                                              :active-slug    (:active-slug @app-state-atom)}]]
      [footer]
      ])
   )
