@@ -17,7 +17,6 @@
   (let [goto (fn [page] (trigger-event {:name :page-selected :data {:page-id page}}))
         highlight-style {:border-bottom "1px solid black"}]
     [:div
-
      [:nav {:style (get-style [:navbar :nav])}
       [:ul {:style (get-style [:navbar :ul])}
        [:li {:on-click (fn [] (goto :resume)) :style (get-style [:navbar :li]
@@ -27,8 +26,7 @@
        [:li {:on-click (fn [] (goto :posts)) :style (get-style [:navbar :li]
                                                                (when (or (= active-page :posts)
                                                                          (= active-page :post))
-                                                                 highlight-style)
-                                                               )}
+                                                                 highlight-style))}
         "Posts"]
        [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li] (when (= active-page :portfolio)
                                                                                    highlight-style))}
@@ -518,6 +516,60 @@
    [:h1 {:style (get-style [:title])}
     title]])
 
+(defn success-icon
+  []
+  [:svg {:width "24px" :height "24px" :viewBox "0 0 24 24"}
+   [:circle {:cx 12 :cy 12 :r 10 :fill "none" :stroke "green" :stroke-width "2px"}]
+   [:path {:fill         "none"
+           :stroke-width "2px"
+           :stroke       "green"
+           :d            "M6,11 L11,16 16,7"}]])
+
+(defn notification
+  []
+  (let [local-state-atom (r/atom {:dismissed false})]
+    (fn [{:keys [title message]}]
+      (let [local-state @local-state-atom]
+        (when-not (:dismissed local-state)
+          [:div {:style {:width           "250px"
+                         :background      "#cecece"
+                         :opacity         0.8
+                         :margin-right    "20px"
+                         :margin-bottom   "10px"
+                         :padding         "10px"
+                         :border-radius   "3px"
+                         :display         "flex"
+                         :align-items     "center"
+                         :justify-content "space-between"}}
+           [success-icon]
+           [:div {:style {:display        "flex"
+                          :flex           1
+                          :margin-left    "5px"
+                          :margin-right   "5px"
+                          :flex-direction "column"}}
+            [:h4 {:style {:margin 0}} title]
+            [:span message]]
+           [:span {:on-click (fn []
+                               (reset! local-state-atom {:dismissed true})
+                               )
+                   :style    {:cursor "pointer"}} "x"]
+           ])))))
+
+(defn notifications
+  []
+  [:div
+   {:style {:display        "flex"
+            :flex-direction "column"
+            :position       "absolute"
+            :margin         "20px"
+            :right          0
+            :top            0
+            }}
+   [notification {:title "Hello" :message "cool!"}]
+   [notification {:title "Hello sir!" :message "wosh"}]
+   [notification {:title "A new post is up!" :message "..."}]
+   [notification {:title "Wasup?!"}]])
+
 (defn app-component
   [{:keys [app-state-atom trigger-event theme pages]}]
   (if (loading? @app-state-atom)
@@ -526,6 +578,7 @@
      [header {:trigger-event  trigger-event
               :app-state-atom app-state-atom
               :title          (get-in @app-state-atom [:misc :header :title])}]
+     ;[notifications]
      [menu {:trigger-event  trigger-event
             :app-state-atom app-state-atom
             :visitors       (:visitors @app-state-atom)

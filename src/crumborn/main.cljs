@@ -337,9 +337,7 @@
                                (handle-event! {:name :post-selected :data {:slug    slug
                                                                            :page-id :post}})
                                (when (contains? pages page)
-                                 (handle-event! {:name :page-selected :data {:page-id page}}))
-
-                               ))))
+                                 (handle-event! {:name :page-selected :data {:page-id page}}))))))
 
 ;; Listene to app wide content changes in html TODO
 ;(let [mutation-channel (make-mutation-channel (interop/get-element-by-id "app"))]
