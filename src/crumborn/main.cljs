@@ -203,6 +203,9 @@
     :post-created (async/put! subscription-channel {:event-name :post-created
                                                     :data       data})
 
+    :notification (async/put! subscription-channel {:event-name :notification
+                                                    :data       data})
+
     :front-page-facts (r/rswap! app-state-atom change-fact data)
     :resume-page-facts (r/rswap! app-state-atom change-fact data)
     :posts-page-facts (r/rswap! app-state-atom change-fact data)

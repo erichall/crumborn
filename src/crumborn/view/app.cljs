@@ -525,6 +525,8 @@
            :stroke       "green"
            :d            "M6,11 L11,16 16,7"}]])
 
+;; excellent
+;; https://www.sarasoueidan.com/blog/svg-coordinate-systems/
 (defn notification
   []
   (let [local-state-atom (r/atom {:dismissed false})]
@@ -556,19 +558,34 @@
            ])))))
 
 (defn notifications
-  []
-  [:div
-   {:style {:display        "flex"
-            :flex-direction "column"
-            :position       "absolute"
-            :margin         "20px"
-            :right          0
-            :top            0
-            }}
-   [notification {:title "Hello" :message "cool!"}]
-   [notification {:title "Hello sir!" :message "wosh"}]
-   [notification {:title "A new post is up!" :message "..."}]
-   [notification {:title "Wasup?!"}]])
+  [{:keys [trigger-event]}]
+  (let [notifications-atom (r/atom [])
+        remove-notification (fn [notification-id]
+                              (js/setTimeout (fn []
+                                               (reset! notifications-atom (filter (fn [{:keys [id]}]
+                                                                                    (not= notification-id id))
+                                                                                  @notifications-atom))
+                                               ) 5000))]
+    (trigger-event {:name :subscribe
+                    :data {:event-name  :notification
+                           :id          :notifications
+                           :callback-fn (fn [notification]
+                                          (r/rswap! notifications-atom conj notification)
+                                          (remove-notification (:id notification)))}})
+    (fn []
+      [:div
+       {:style {:display        "flex"
+                :flex-direction "column"
+                :position       "absolute"
+                :margin         "20px"
+                :right          0
+                :top            0
+                }}
+       (map-indexed (fn [idx {:keys [title message id]}]
+                      [notification {:title   title
+                                     :message message
+                                     :key     (str id "-" idx)
+                                     }]) @notifications-atom)])))
 
 (defn app-component
   [{:keys [app-state-atom trigger-event theme pages]}]
@@ -578,7 +595,7 @@
      [header {:trigger-event  trigger-event
               :app-state-atom app-state-atom
               :title          (get-in @app-state-atom [:misc :header :title])}]
-     ;[notifications]
+     [notifications {:trigger-event trigger-event}]
      [menu {:trigger-event  trigger-event
             :app-state-atom app-state-atom
             :visitors       (:visitors @app-state-atom)
