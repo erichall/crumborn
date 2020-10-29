@@ -529,11 +529,16 @@
 ;; https://www.sarasoueidan.com/blog/svg-coordinate-systems/
 (defn notification
   []
-  (let [local-state-atom (r/atom {:dismissed false})]
+  (let [local-state-atom (r/atom {:dismissed   false
+                                  :initialized false})]
     (fn [{:keys [title message]}]
-      (let [local-state @local-state-atom]
+      (let [local-state @local-state-atom
+            initialized (:initialized local-state)]
+        (println local-state initialized)
         (when-not (:dismissed local-state)
-          [:div {:style {:width           "250px"
+          [:div {:style {:width           (if initialized "250px" "0px")
+                         :overflow        "hidden"
+                         :transition      "width .5s"
                          :background      "#cecece"
                          :opacity         0.8
                          :margin-right    "20px"
@@ -555,7 +560,12 @@
                                (reset! local-state-atom {:dismissed true})
                                )
                    :style    {:cursor "pointer"}} "x"]
-           ])))))
+           (when-not initialized
+             (js/setTimeout (fn [] (r/rswap! local-state-atom assoc :initialized true)) 1)
+             )
+           ])
+
+        ))))
 
 (defn notifications
   [{:keys [trigger-event]}]
@@ -565,7 +575,7 @@
                                                (reset! notifications-atom (filter (fn [{:keys [id]}]
                                                                                     (not= notification-id id))
                                                                                   @notifications-atom))
-                                               ) 5000))]
+                                               ) 2500))]
     (trigger-event {:name :subscribe
                     :data {:event-name  :notification
                            :id          :notifications
