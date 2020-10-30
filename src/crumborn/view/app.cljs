@@ -575,7 +575,7 @@
                                                (reset! notifications-atom (filter (fn [{:keys [id]}]
                                                                                     (not= notification-id id))
                                                                                   @notifications-atom))
-                                               ) 2500))]
+                                               ) 10000))]
     (trigger-event {:name :subscribe
                     :data {:event-name  :notification
                            :id          :notifications
@@ -583,19 +583,27 @@
                                           (r/rswap! notifications-atom conj notification)
                                           (remove-notification (:id notification)))}})
     (fn []
-      [:div
-       {:style {:display        "flex"
-                :flex-direction "column"
-                :position       "absolute"
-                :margin         "20px"
-                :right          0
-                :top            0
-                }}
-       (map-indexed (fn [idx {:keys [title message id]}]
-                      [notification {:title   title
-                                     :message message
-                                     :key     (str id "-" idx)
-                                     }]) @notifications-atom)])))
+      (let [local-state @notifications-atom]
+        [:div {:style {:width "0px"}}]
+        [:div
+         {:style {:display        "flex"
+                  :flex-direction "column"
+                  :position       "absolute"
+                  :margin         "20px"
+                  :right          0
+                  :top            0
+                  }}
+         (if (empty? local-state)
+           [:div {:width "auto"}]
+           (map-indexed (fn [idx {:keys [title message id]}]
+                          [notification {:title   title
+                                         :message message
+                                         :key     (str id "-" idx)
+                                         }]) @notifications-atom)
+           )
+         ]
+        )
+      )))
 
 (defn app-component
   [{:keys [app-state-atom trigger-event theme pages]}]
