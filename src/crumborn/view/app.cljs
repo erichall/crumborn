@@ -562,10 +562,7 @@
                    :style    {:cursor "pointer"}} "x"]
            (when-not initialized
              (js/setTimeout (fn [] (r/rswap! local-state-atom assoc :initialized true)) 1)
-             )
-           ])
-
-        ))))
+             )])))))
 
 (defn notifications
   [{:keys [trigger-event]}]
