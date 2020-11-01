@@ -430,8 +430,7 @@
                                    :resize           "none"
                                    :width            "100%"
                                    :height           "15%"
-                                   :margin-bottom    "20px"
-                                   }
+                                   :margin-bottom    "20px"}
                      :on-change   (fn [e]
                                     (swap! input-atom assoc :settings (aget e "target" "value")))}]
          (when-not maybe-settings
