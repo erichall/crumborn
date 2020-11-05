@@ -471,6 +471,7 @@
                        :justify-content "space-between"}}
          [:span (:date-created post)]
          [:span (:points post)]]
+        [:div (:content post)]
 
         ])]))
 
