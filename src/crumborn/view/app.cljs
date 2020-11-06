@@ -13,39 +13,46 @@
 
 
 (defn menu
-  [{:keys [trigger-event active-page authenticated? visitors app-state-atom]}]
+  [{:keys [trigger-event active-page authenticated? app-state-atom]}]
   (let [goto (fn [page] (trigger-event {:name :page-selected :data {:page-id page}}))
-        highlight-style {:border-bottom "1px solid black"}]
+        highlight-style (get-style [:navbar :highlight-style])]
     [:div
      [:nav {:style (get-style [:navbar :nav])}
       [:ul {:style (get-style [:navbar :ul])}
        [:li {:on-click (fn [] (goto :resume)) :style (get-style [:navbar :li]
                                                                 {:margin-left "0px"}
                                                                 (when (= active-page :resume) highlight-style))}
-        "Resume"]
+        [:a {:style (get-style [:navbar :a])
+             :href  "#resume"} "Resume"]]
        [:li {:on-click (fn [] (goto :posts)) :style (get-style [:navbar :li]
                                                                (when (or (= active-page :posts)
                                                                          (= active-page :post))
                                                                  highlight-style))}
-        "Posts"]
+        [:a {:href  "#posts"
+             :style (get-style [:navbar :a])} "Posts"]]
        [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li] (when (= active-page :portfolio)
                                                                                    highlight-style))}
-        "Portfolio"]
+        [:a {:style (get-style [:navbar :a])
+             :href  "#portfolio"} "Portfolio"]]
 
        (when authenticated?
          [:li {:on-click (fn [] (goto :dashboard)) :style (assoc (get-style [:navbar :li]) :float "right")} "Dashboard"])
 
        [:li {:on-click (fn [] (trigger-event {:name :toggle-theme}))
              :style    (assoc (get-style [:navbar :li]) :float "right")}
-        (if (is-dark-theme?)
-          "Light"
-          "Dark"
-          )]
+        [:a {:href     "#"
+             :on-click (fn [evt] (.preventDefault evt))
+             :style    (get-style [:navbar :a])}
+         (if (is-dark-theme?)
+           "Light"
+           "Dark"
+           )]]
        [:li {:style (assoc (get-style [:navbar :li]) :float "right")}
         [:span {:title "Active visitors"}
-         (get @app-state-atom :visitors)]]
+         [:a {:tab-index "0"
+              :style     (get-style [:navbar :a])} (get @app-state-atom :visitors)]]]
        ]]
-     [:hr {:style {:margin-bottom "30px"}}]]))
+     [:hr]]))
 
 (defn front-page
   [{:keys [page-state app-state-atom]}]
@@ -90,7 +97,8 @@
        [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
        [:span "Major in Data Sciences, Natural Languages"]
        [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-       [:a {:href "http://kth.diva-portal.org/smash/record.jsf?pid=diva2:1361475" :target "_blank"} "Thesis"]
+       [:a {:style {:color "#e81c4f"}
+            :href  "http://kth.diva-portal.org/smash/record.jsf?pid=diva2:1361475" :target "_blank"} "Thesis"]
        ]]
      [:tr
       [:td
@@ -111,7 +119,8 @@
        [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
        [:span "Royal Institute of Technology"]
        [:span {:style {:margin-right "10px" :margin-left "10px"}} "|"]
-       [:a {:href "http://kth.diva-portal.org/smash/record.jsf?pid=diva2:1106455" :target "_blank"} "Thesis"]
+       [:a {:style {:color "#e81c4f"}
+            :href  "http://kth.diva-portal.org/smash/record.jsf?pid=diva2:1106455" :target "_blank"} "Thesis"]
        ]]
 
      [:tr
@@ -307,10 +316,11 @@
         (map (fn [{:keys [id points title date-created content author] :as p}]
                [:<> {:key id}
                 [:tr {:style {:line-height 1}}
-                 [:td [:h1 {:style    {:margin "0px"
-                                       :cursor "pointer"}
-                            :on-click (fn [] (trigger-event {:name :post-selected :data {:page-id :post :slug (space->dash title)}}))
-                            } title]]]
+                 [:td
+                  [:a {:href     (str "#posts/" (space->dash title))
+                       :style    (get-style [:posts :title])
+                       :on-click (fn [] (trigger-event {:name :post-selected :data {:page-id :post :slug (space->dash title)}}))}
+                   [:h1 {:style (get-style [:posts :title-h1])} title]]]]
                 [:tr {:style {:line-height 1 :padding-bottom "10px"}}
                  [:td {:style {:font-size "9pt" :color "gray"}}
                   [:span (str points " Points by " author)]
@@ -465,7 +475,7 @@
        (not= (dash->space slug) (:title post)) [:p "LOADING"]
        :else
        [:<>
-        [:h1 (:title post)]
+        [:h1 {:style {:margin-top 0}} (:title post)]
         [:div {:style {:display         "flex"
                        :flex-direction  "row"
                        :justify-content "space-between"}}
