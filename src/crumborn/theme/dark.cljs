@@ -18,11 +18,15 @@
                                                  :display         "flex"
                                                  :justify-content "space-between"
                                                  }
-                               :ul              {:margin      0
-                                                 :padding     0
-                                                 :list-style  "none"
-                                                 :line-height "33px"
-                                                 :flex        1}
+                               :ul              {:margin          0
+                                                 :padding         0
+                                                 :list-style      "none"
+                                                 :line-height     "33px"
+                                                 :flex            1
+                                                 :display         "flex"
+                                                 :flex-direction  "row"
+                                                 :justify-content "space-between"
+                                                 }
                                :li              {:display             "inline-block"
                                                  :margin              "0 10px"
                                                  :color               "white"
@@ -35,6 +39,14 @@
                                                  :text-decoration "none"}
                                }
             :posts            {:title    {:margin          "0px"
-                                          :text-decoration "none"}
-                               :title-h1 {:color "white"}}
+                                          :text-decoration "none"
+                                          :font-size       "14pt"
+                                          :line-height     "14pt"
+                                          :font-weight     "400"
+                                          }
+                               :title-h1 {:color         "white"
+                                          :margin        "0px"
+                                          :text-overflow "ellipsis"
+                                          :white-space   "nowrap"}}
+            :post             {:title {:margin "0px"}}
             })

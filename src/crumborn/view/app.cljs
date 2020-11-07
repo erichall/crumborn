@@ -7,8 +7,10 @@
                                    space->space
                                    space->dash
                                    dash->space]]
+            [crumborn.view.editor :refer [editor]]
             [reagent.core :as r]
             [cljs.core.async :as async]
+            [markdown-to-hiccup.core :as m]
             ))
 
 
@@ -19,46 +21,53 @@
     [:div
      [:nav {:style (get-style [:navbar :nav])}
       [:ul {:style (get-style [:navbar :ul])}
-       [:li {:on-click (fn [] (goto :resume)) :style (get-style [:navbar :li]
-                                                                {:margin-left "0px"}
-                                                                (when (= active-page :resume) highlight-style))}
-        [:a {:style (get-style [:navbar :a])
-             :href  "#resume"} "Resume"]]
-       [:li {:on-click (fn [] (goto :posts)) :style (get-style [:navbar :li]
-                                                               (when (or (= active-page :posts)
-                                                                         (= active-page :post))
-                                                                 highlight-style))}
-        [:a {:href  "#posts"
-             :style (get-style [:navbar :a])} "Posts"]]
-       [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li] (when (= active-page :portfolio)
-                                                                                   highlight-style))}
-        [:a {:style (get-style [:navbar :a])
-             :href  "#portfolio"} "Portfolio"]]
+       [:div
+        [:li {:on-click (fn [] (goto :resume)) :style (get-style [:navbar :li]
+                                                                 {:margin-left "0px"}
+                                                                 (when (= active-page :resume) highlight-style))}
+         [:a {:style (get-style [:navbar :a])
+              :href  "#resume"} "Resume"]]
+        [:li {:on-click (fn [] (goto :posts)) :style (get-style [:navbar :li]
+                                                                (when (or (= active-page :posts)
+                                                                          (= active-page :post))
+                                                                  highlight-style))}
+         [:a {:href  "#posts"
+              :style (get-style [:navbar :a])} "Posts"]]
+        [:li {:on-click (fn [] (goto :portfolio)) :style (get-style [:navbar :li] (when (= active-page :portfolio)
+                                                                                    highlight-style))}
+         [:a {:style (get-style [:navbar :a])
+              :href  "#portfolio"} "Portfolio"]]]
 
-       (when authenticated?
-         [:li {:on-click (fn [] (goto :dashboard)) :style (assoc (get-style [:navbar :li]) :float "right")} "Dashboard"])
+       [:div
+        (when authenticated?
+          [:li {:on-click (fn [] (goto :dashboard)) :style (get-style [:navbar :li])} "Dashboard"])
 
-       [:li {:on-click (fn [] (trigger-event {:name :toggle-theme}))
-             :style    (assoc (get-style [:navbar :li]) :float "right")}
-        [:a {:href     "#"
-             :on-click (fn [evt] (.preventDefault evt))
-             :style    (get-style [:navbar :a])}
-         (if (is-dark-theme?)
-           "Light"
-           "Dark"
-           )]]
-       [:li {:style (assoc (get-style [:navbar :li]) :float "right")}
-        [:span {:title "Active visitors"}
-         [:a {:tab-index "0"
-              :style     (get-style [:navbar :a])} (get @app-state-atom :visitors)]]]
+        [:li {:on-click (fn [] (trigger-event {:name :toggle-theme}))
+              :style    (get-style [:navbar :li])}
+         [:a {:href     "#"
+              :key      "theme-mode"
+              :on-click (fn [evt] (.preventDefault evt))
+              :style    (get-style [:navbar :a])}
+          (if (is-dark-theme?)
+            "Light"
+            "Dark"
+            )]]
+        [:li {:style (get-style [:navbar :li])}
+         [:span {:title "Active visitors"}
+          [:a {:tab-index "0"
+               :style     (get-style [:navbar :a])} (get @app-state-atom :visitors)]]]]
        ]]
      [:hr]]))
 
 (defn front-page
   [{:keys [page-state app-state-atom]}]
+  ; TODO
+  ;[editor]
+
   [:div {:style {:padding-top "20px"}}
    [:p (get-in page-state [:intro])]
-   [:p (get-in page-state [:about])]])
+   [:p (get-in page-state [:about])]]
+  )
 
 (defn dashboard
   [{:keys [trigger-event]}]
@@ -315,12 +324,15 @@
        [:tbody
         (map (fn [{:keys [id points title date-created content author] :as p}]
                [:<> {:key id}
-                [:tr {:style {:line-height 1}}
+                [:tr
                  [:td
                   [:a {:href     (str "#posts/" (space->dash title))
                        :style    (get-style [:posts :title])
                        :on-click (fn [] (trigger-event {:name :post-selected :data {:page-id :post :slug (space->dash title)}}))}
-                   [:h1 {:style (get-style [:posts :title-h1])} title]]]]
+                   ;[:h1 {:style (get-style [:posts :title-h1])}
+                   title
+                   ;]
+                   ]]]
                 [:tr {:style {:line-height 1 :padding-bottom "10px"}}
                  [:td {:style {:font-size "9pt" :color "gray"}}
                   [:span (str points " Points by " author)]
@@ -352,7 +364,7 @@
                   [:span {:style {:padding-left "10px"}} date-created]
                   ]
                  ]
-                [:tr {:style {:height "25px"}}]]) (vals posts))]])))
+                [:tr {:style {:height "15px"}}]]) (reverse (sort-by :date-created (vals posts))))]])))
 
 (defn portfolio
   [{:keys [trigger-event app-state-atom]}]
@@ -375,7 +387,7 @@
                [:img {:src img :style {:float "right"} :float "right"}]
                text
                ]]]
-            [:tr {:style {:height "30px"}}]]
+            [:tr {:style {:height "15px"}}]]
            ) [
               {:title "Cool projet" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
               {:title "An app" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
@@ -461,29 +473,65 @@
                                    (trigger-event {:name :create-post
                                                    :data {:post (-> maybe-settings
                                                                     (assoc :content (:content @input-atom)))}}))) 250)}
-          "Create"]]))
-    ))
+          "Create"]]))))
+
+(defn post-info-row
+  [{:keys [points author trigger-event id date-created]}]
+  [:tr {:style {:line-height 1 :padding-bottom "10px"}}
+   [:td {:style {:font-size "9pt" :color "gray"}}
+    [:span (str points " Points by " author)]
+    [:span {:style {:padding-left "10px"}} " | "]
+    [:span {:style {:padding-left "10px" :padding-right "10px"}}
+     [:span {:style    {:cursor              "pointer"
+                        :font-size           "9pt"
+                        :color               "gray"
+                        :-webkit-user-select "none"
+                        :-moz-user-select    "none"
+                        :-ms-user-select     "none"
+                        }
+             :on-click (fn []
+                         (trigger-event {:name :vote-down
+                                         :data {:id id}}))}
+      "▼"]
+     [:span {:style    {:cursor              "pointer"
+                        :-webkit-user-select "none"
+                        :-moz-user-select    "none"
+                        :-ms-user-select     "none"
+                        :font-size           "9pt"
+                        :color               "gray"
+                        }
+             :on-click (fn []
+                         (trigger-event {:name :vote-up
+                                         :data {:id id}}))}
+      "▲"]]
+    [:span {:style {:padding-left "10px"}} " | "]
+    [:span {:style {:padding-left "10px"}} date-created]
+    ]
+   ]
+  )
 
 (defn post
-  [{:keys [page-state active-slug]}]
+  [{:keys [page-state active-slug trigger-event]}]
   (let [slug active-slug
         error (get-in page-state [:error])
         post (get-in page-state [:post])]
-    [:div {:style {:flex " 1 0 auto"}}
-     (cond
-       (some? error) [:h4 error]
-       (not= (dash->space slug) (:title post)) [:p "LOADING"]
-       :else
-       [:<>
-        [:h1 {:style {:margin-top 0}} (:title post)]
-        [:div {:style {:display         "flex"
-                       :flex-direction  "row"
-                       :justify-content "space-between"}}
-         [:span (:date-created post)]
-         [:span (:points post)]]
-        [:div (:content post)]
-
-        ])]))
+    (cond
+      (some? error) [:h4 error]
+      (not= (dash->space slug) (:title post)) [:p "LOADING"]
+      :else
+      [:<>
+       [:h1 {:style (get-style [:post :title])} (:title post)]
+       [:table
+        [:tbody
+         [post-info-row {:points        (:points post)
+                         :author        (:author post)
+                         :trigger-event trigger-event
+                         :id            (:id post)
+                         :date-created  (:date-created post)}]
+         ]]
+       (->> (m/md->hiccup (:content post))
+            m/component)
+       ])))
 
 (defn footer
   []

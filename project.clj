@@ -10,6 +10,7 @@
                  [org.clojure/clojurescript "1.10.520"]
                  [org.clojure/core.async "0.4.500"]
                  [reagent "0.8.1"]
+                 [markdown-to-hiccup "0.6.2"]
                  [cljs-http "0.1.46"]
                  [com.taoensso/timbre "5.0.0"]]
 
@@ -108,7 +109,7 @@
                     :plugins      [[lein-kibit "0.1.8"]]}
 
              }
-  :aliases {"kibit"    ["with-profile" "+lint" "kibit"]
-            "lint"     ["do"
-                        ["kibit"]]
+  :aliases {"kibit" ["with-profile" "+lint" "kibit"]
+            "lint"  ["do"
+                     ["kibit"]]
             })
