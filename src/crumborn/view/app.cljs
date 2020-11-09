@@ -62,11 +62,11 @@
 (defn front-page
   [{:keys [page-state app-state-atom]}]
   ;; TODO
-  ;[editor]
+  [editor]
 
-  [:div {:style {:padding-top "20px"}}
-   [:p (get-in page-state [:intro])]
-   [:p (get-in page-state [:about])]]
+  ;[:div {:style {:padding-top "20px"}}
+  ; [:p (get-in page-state [:intro])]
+  ; [:p (get-in page-state [:about])]]
   )
 
 (defn dashboard

@@ -33,3 +33,18 @@
 (defn set-hash!
   [loc]
   (set! (.-hash js/window.location) loc))
+
+(defn get-bounding-client-rect [evt]
+  (let [rect (js->clj (.getBoundingClientRect (.-target evt)))]
+    {:bottom (.-bottom rect)
+     :height (.-height rect)
+     :left   (.-left rect)
+     :right  (.-right rect)
+     :top    (.-top rect)
+     :width  (.-width rect)
+     :x      (.-x rect)
+     :y      (.-y rect)}))
+
+(defn mouse-x [evt] (.-clientX evt))
+(defn mouse-y [evt] (.-clientY evt))
+(defn get-type [evt] (.-type evt))
