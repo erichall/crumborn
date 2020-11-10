@@ -47,4 +47,20 @@
 
 (defn mouse-x [evt] (.-clientX evt))
 (defn mouse-y [evt] (.-clientY evt))
-(defn get-type [evt] (.-type evt))
+(defn get-type [evt] (.-name (.-type evt)))
+(defn first-child [node] (.-firstChild node))
+(defn create-range [el] (.createRange el))
+(defn get-client-rects [range]
+  (let [rects (array-seq (.getClientRects range))]
+    (map (fn [r]
+           {
+            :bottom (.-bottom r)
+            :height (.-height r)
+            :left   (.-left r)
+            :right  (.-right r)
+            :top    (.-top r)
+            :width  (.-width r)
+            :x      (.-x r)
+            :y      (.-y r)}) rects)))
+(defn document [] js/document)
+(defn select-node-contents [range node] (js-invoke range "selectNodeContents" node))
