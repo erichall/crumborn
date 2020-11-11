@@ -34,8 +34,9 @@
   [loc]
   (set! (.-hash js/window.location) loc))
 
-(defn get-bounding-client-rect [evt]
-  (let [rect (js->clj (.getBoundingClientRect (.-target evt)))]
+(defn get-bounding-client-rect
+  [evt el]
+  (let [rect (js->clj (.getBoundingClientRect el))]
     {:bottom (.-bottom rect)
      :height (.-height rect)
      :left   (.-left rect)
