@@ -35,7 +35,7 @@
   (set! (.-hash js/window.location) loc))
 
 (defn get-bounding-client-rect
-  [evt el]
+  [el]
   (let [rect (js->clj (.getBoundingClientRect el))]
     {:bottom (.-bottom rect)
      :height (.-height rect)
@@ -65,3 +65,4 @@
             :y      (.-y r)}) rects)))
 (defn document [] js/document)
 (defn select-node-contents [range node] (js-invoke range "selectNodeContents" node))
+(defn inner-html [el] (.-innerHTML el))

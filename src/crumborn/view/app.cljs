@@ -62,7 +62,7 @@
 (defn front-page
   [{:keys [page-state app-state-atom]}]
   ;; TODO
-  ;[editor]
+  ;;  [editor]
 
   [:div {:style {:padding-top "20px"}}
    [:p (get-in page-state [:intro])]
