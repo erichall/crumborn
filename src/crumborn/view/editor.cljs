@@ -161,14 +161,14 @@
     (-> (remove-row state active-line)                      ;; TODO this is broken, cursor jumps to first line
         (update :active-line #(max 0 (dec (:active-line %))))
         (assoc-in [:cursor :y] (dec-cursor-y (:y cursor) (:line-height styles)))
-        (assoc-in [:cursor :x] (set-cursor-end-of-row state (:active-line state)))))
-  ;(= 0 (:x cursor)) ;; TODO handle remove line and put rest of line into the one above
-  :else
-  (let [pos (x->char-pos state (- (:x cursor) 1))]
-    (->>
-      (remove-char-at (nth buffer active-line) pos)
-      (assoc-in state [:buffer active-line])
-      dec-cursor-x))) )
+        (assoc-in [:cursor :x] (set-cursor-end-of-row state (:active-line state))))
+    ;(= 0 (:x cursor)) ;; TODO handle remove line and put rest of line into the one above
+    :else
+    (let [pos (x->char-pos state (- (:x cursor) 1))]
+      (->>
+        (remove-char-at (nth buffer active-line) pos)
+        (assoc-in state [:buffer active-line])
+        dec-cursor-x))))
 
 (defn process-key-down
   [state {:keys [key]}]
