@@ -11,10 +11,11 @@
 
 (enable-console-print!)
 ;; TODO
-;; handle when rows expands to multiple rows, can no longer use 21px as height... :~>
-;; handle selections for empty rows
-;; remove fetching row width and chars directly from the dom cus it messes up when removing chars..
-;;    we should fetch it from the buffer instead and keep a fixed char-width as a style maybe??
+;; []   handle when rows expands to multiple rows, can no longer use 21px as height... :~>
+;; [X]  handle selections for empty rows
+;; [X]  remove fetching row width and chars directly from the dom cus it messes up when removing chars..
+;;        we should fetch it from the buffer instead and keep a fixed char-width as a style maybe??
+;; []   Remove active-line and just get-it from cursor y pos?
 
 (defn get-lines
   [buffer]
@@ -34,7 +35,7 @@
                  :end     {:x 0 :x-screen 0 :y 0 :y-screen 0}}
    :active-line 0
    :editable    true
-   :ch-width    nil                                         ; must measure this......
+   :char-width  nil                                         ; must measure this......
    :styles      {:line-height   21                          ; https://grtcalculator.com/
                  :font-size     12
                  :editor-width  500
@@ -50,25 +51,20 @@
     (events/listen element type (fn [evt] (async/put! out evt)))
     out))
 
-;; TODO remove this, get it from buffer instead
-(defn get-dom-row-width
-  "Get the raw textNode width inside a div"
-  [row-or-num]
-  (if (int? row-or-num)
-    (let [text-node (-> (interop/get-element-by-id (str "row-" row-or-num))
-                        interop/first-child)
-          range (-> (interop/document)
-                    interop/create-range)]
-      (if (some? text-node)                                 ;; if its an empty row, this is nul
-        (do
-          (interop/select-node-contents range text-node)    ;; select, returns nothing....
-          (-> (interop/get-client-rects range)
-              first
-              :width))
-        1))
-    (-> (interop/get-client-rects row-or-num)               ;; Assume row is an dom element, maybe check this :)
-        first
-        :width)))
+;; TODO handle edge cases
+(defn get-row
+  [{:keys [buffer]} row-number]
+  (nth buffer row-number))
+
+(defn get-row-length
+  [state row-number]
+  (count (get-row state row-number)))
+
+(defn get-row-width
+  [{:keys [char-width] :as state} row-num]
+  {:pre  [(int? row-num)]
+   :post [(interop/not-nan? %) (double? %)]}
+  (* (get-row-length state row-num) char-width))
 
 (defn count-rows
   [{:keys [buffer]}]
@@ -78,11 +74,6 @@
   [row-number]
   (str "row-" row-number))
 
-(defn get-row-by-dom
-  [row-number]
-  (-> (interop/get-element-by-id (str "row-" row-number))
-      interop/inner-html))
-
 ;; TODO dont deref inside pure fn
 (defn y->row
   [y]
@@ -90,52 +81,44 @@
       Math/floor
       (min (dec (count-rows @state-atom)))))
 
+
 (defn clamp-to-chars
-  [row-number value]
-  (let [row-text (get-row-by-dom row-number)                ;; TODO dont get it by the edom here
-        chars (Math/max 1 (count row-text))
-        char-width (:char-width @state-atom)]               ;; TODO dont deref
+  [{:keys [char-width] :as state} row-number value]
+  {:pre  [(interop/not-nan? value)]
+   :post [(double? %) (interop/not-nan? %)]}
+  (let [chars (get-row-length state row-number)]
     (* char-width (min chars (Math/round (/ value char-width))))))
 
 (defn clamp-cursor
   "Clamp x-position of cursor position between chars"
-  [{:keys [x y] :as mouse}]
-  (assoc mouse :x (clamp-to-chars (y->row y) x)))
+  [state {:keys [x y] :as mouse}]
+  (assoc mouse :x (clamp-to-chars state (y->row y) x)))
 
-;; TODO handle edge cases
-(defn get-row
-  [{:keys [buffer]} row-number]
-  (nth buffer row-number))
 
 (defn get-active-row
   [{:keys [active-line] :as state}]
   (get-row state active-line))
 
-(defn get-char-width
-  [row-number]
-  (:char-width @state-atom))
-
 (defn inc-cursor-x
   "Increase cursor position x with one char"
-  [{:keys [active-line] :as state}]
-  (let [row-width (get-dom-row-width active-line)
-        ch-width (get-char-width active-line)]
-    (update-in state [:cursor :x] #(min (+ ch-width %)))))
+  [{:keys [char-width] :as state}]
+  (update-in state [:cursor :x] #(min (+ char-width %))))
 
 (defn dec-cursor-x
   "Decrease cursor position x with one char"
-  [{:keys [active-line] :as state}]
-  (update-in state [:cursor :x] #(max 0 (->> (- % (get-char-width active-line))
-                                             (clamp-to-chars active-line)))))
+  [{:keys [active-line char-width] :as state}]
+  (update-in state [:cursor :x] #(max 0 (->> (- % char-width)
+                                             (clamp-to-chars state active-line)))))
 
 (defn set-cursor-end-of-row
-  [row-number]
-  (let [width (get-dom-row-width row-number)]
-    (clamp-to-chars row-number width)))
+  [state row-number]
+  {:pre [(>= row-number 0)]}
+  (->> (get-row-width state row-number)
+       (clamp-to-chars state row-number)))
 
 (defn x->char-pos
-  [row-number x]
-  (/ x (get-char-width row-number)))
+  [{:keys [char-width]} x]
+  (/ x char-width))
 
 (defn dec-cursor-y
   [y line-height]
@@ -156,39 +139,47 @@
   [{:keys [active-line] :as state} key]
   (let [row (get-active-row state)
         cursor-x (get-in state [:cursor :x])
-        pos (x->char-pos active-line cursor-x)
+        pos (x->char-pos state cursor-x)
         new-row (str-insert row key pos)]
     (-> (assoc-in state [:buffer active-line] new-row)
         inc-cursor-x)))
 
 (defn empty-row?
-  [row-number]
-  (empty? (get-row-by-dom row-number)))                     ;; TODO dont geet it by dom
+  [state row-number]
+  (empty? (get-row state row-number)))
 
 (defn remove-row
   [{:keys [buffer] :as state} row-number]
   (assoc state :buffer (vec (concat (subvec buffer 0 row-number) (subvec buffer (inc row-number))))))
 
+;; TODO handle if cursor is first on row and if no more rows above
 (defn process-backspace
   [{:keys [active-line cursor buffer styles] :as state}]
-  (if (empty-row? active-line)
-    (let [state (-> (remove-row state active-line)
-                    (update :active-line dec))]
-      (-> (assoc-in state [:cursor :y] (dec-cursor-y (:y cursor) (:line-height styles)))
-          (assoc-in [:cursor :x] (set-cursor-end-of-row (:active-line state)))))
-    (let [ch-width (get-char-width active-line)
-          pos (x->char-pos active-line (- (:x cursor) 1))
-          ]
-      (println " E" pos (nth buffer active-line))
-      (->>
-        (remove-char-at (nth buffer active-line) pos)
-        (assoc-in state [:buffer active-line])
-        dec-cursor-x))
-    ))
+  (println cursor)
+  (cond
+    (empty-row? state active-line)
+    (-> (remove-row state active-line)                      ;; TODO this is broken, cursor jumps to first line
+        (update :active-line #(max 0 (dec (:active-line %))))
+        (assoc-in [:cursor :y] (dec-cursor-y (:y cursor) (:line-height styles)))
+        (assoc-in [:cursor :x] (set-cursor-end-of-row state (:active-line state)))))
+  ;(= 0 (:x cursor)) ;; TODO handle remove line and put rest of line into the one above
+  :else
+  (let [pos (x->char-pos state (- (:x cursor) 1))]
+    (->>
+      (remove-char-at (nth buffer active-line) pos)
+      (assoc-in state [:buffer active-line])
+      dec-cursor-x))) )
+
 (defn process-key-down
   [state {:keys [key]}]
   (condp re-matches key
     #"Enter" (update state :keys-down conj (keyword key))
+    #"Shift" nil
+    #"Meta" nil
+    #"ArrowRight" nil
+    #"ArrowLeft" nil
+    #"ArrowUp" nil
+    #"ArrowDown" nil
     #"Backspace" (->
                    (update state :keys-down conj (keyword key))
                    process-backspace)
@@ -231,13 +222,11 @@
       Math/floor
       int))
 
-
-
-
 (defn in-editor?
   [{:keys [x y]}]
   ;; TODO dont deref inside pure fn
-  (and (>= x 0) (<= x (get-in @state-atom [:styles :editor-width])) (>= y 0) (<= y (get-in @state-atom [:styles :editor-height]))))
+  (and (>= x 0) (<= x (get-in @state-atom [:styles :editor-width]))
+       (>= y 0) (<= y (get-in @state-atom [:styles :editor-height]))))
 
 (defn process-mouse-down
   [state {:keys [js-evt]}]
@@ -245,7 +234,7 @@
     (when (in-editor? mouse)
       (-> (assoc-in state [:mouse :start] mouse)
           (assoc-in [:mouse :is-down] true)
-          (assoc :cursor (clamp-cursor mouse))
+          (assoc :cursor (clamp-cursor state mouse))
           (assoc :active-line (y->row (:y mouse)))
           (assoc :selections [])))))
 
@@ -267,38 +256,38 @@
 
 (defn selection-x->end
   "position of a row from x to the end of that row"
-  [row-num x full-width line-height]
-  {:width (clamp-to-chars row-num (- full-width x))
+  [state row-num x full-width line-height]
+  {:width (clamp-to-chars state row-num (- full-width x))
    :top   (selection-top-dist row-num line-height)
-   :left  (clamp-to-chars row-num x)})
+   :left  (clamp-to-chars state row-num x)})
 
 (defn selection-zero->x
   "position of a row from start of the row to coordinate x"
-  [row-num x line-height]
-  {:width (clamp-to-chars row-num x)
+  [state row-num x line-height]
+  {:width (clamp-to-chars state row-num x)
    :top   (selection-top-dist row-num line-height)
    :left  0})
 
 (defn selection-zero->end
   "position of a fully selected row"
-  [line-height row-num]
-  (let [width (->> (str "row-" row-num) interop/get-element-by-id get-dom-row-width)]
-    {:width (if (zero? width) 7.2 width)
+  [state line-height row-num]
+  (let [width (get-row-width state row-num)]
+    {:width (if (zero? width) 7.2 width)                    ;; TODO 7.2...
      :top   (selection-top-dist row-num line-height)
      :left  0}))
 
 (defn select-rows-between
-  [a b line-height]
+  [state a b line-height]
   (let [fixed-row (y->row (:y a))
         moving-row (y->row (:y b))
-        fixed-row-width (->> (str "row-" fixed-row) interop/get-element-by-id get-dom-row-width)
-        moving-row-width (->> (str "row-" moving-row) interop/get-element-by-id get-dom-row-width)
+        fixed-row-width (get-row-width state fixed-row)
+        moving-row-width (get-row-width state moving-row)
         fixed-x (min (:x a) fixed-row-width)
         moving-x (min (:x b) moving-row-width)]
     (if (= fixed-row moving-row)                            ;; same row
-      [{:width (clamp-to-chars fixed-row (min (Math/abs (- fixed-x moving-x)) fixed-row-width))
+      [{:width (clamp-to-chars state fixed-row (min (Math/abs (- fixed-x moving-x)) fixed-row-width))
         :top   (* fixed-row line-height)
-        :left  (clamp-to-chars fixed-row (min fixed-x moving-x))}]
+        :left  (clamp-to-chars state fixed-row (min fixed-x moving-x))}]
       (concat                                               ;; either drag up or down for different rows
         (->>
           (ge-sub fixed-row moving-row)                     ;; n-rows between start and end selection row ;; remove 1 cus of separate handling
@@ -306,12 +295,12 @@
           (max 0)                                           ;; can't be < 0, no selections in this case
           range                                             ;; n-rows to be selected
           (map #(+ % 1 (min fixed-row moving-row)))         ;; apply correct row-numbers for fully selected rows
-          (map (partial selection-zero->end line-height)))  ;; map full selection
+          (map (fn [row-num] (selection-zero->end state line-height row-num)))) ;; map full selection
         (if (> fixed-row moving-row)
-          [(selection-x->end moving-row moving-x moving-row-width line-height)
-           (selection-zero->x fixed-row fixed-x line-height)]
-          [(selection-x->end fixed-row fixed-x fixed-row-width line-height)
-           (selection-zero->x moving-row moving-x line-height)])))))
+          [(selection-x->end state moving-row moving-x moving-row-width line-height)
+           (selection-zero->x state fixed-row fixed-x line-height)]
+          [(selection-x->end state fixed-row fixed-x fixed-row-width line-height)
+           (selection-zero->x state moving-row moving-x line-height)])))))
 
 (defn process-mouse-move
   [state {:keys [js-evt]}]
@@ -319,8 +308,9 @@
     (let [mouse (->> (get-dom-el "editor-area") (get-relative-mouse-cords js-evt))]
       (when (in-editor? mouse)
         (-> (assoc-in state [:mouse :end] mouse)
-            (assoc :cursor (clamp-cursor mouse))
+            (assoc :cursor (clamp-cursor state mouse))
             (as-> state (assoc state :selections (select-rows-between
+                                                   state
                                                    (get-in state [:mouse :start])
                                                    (get state :cursor)
                                                    (get-in state [:styles :line-height]))))
@@ -345,8 +335,7 @@
                                                  new-state
                                                  state)))
     :measure-char (swap! state-atom assoc :char-width (:char-width data))
-    :row-mouse-up ""
-    :row-mouse-leave ""))
+    (js/console.warn "Unable to handle event" name data)))
 
 (defn editor
   []
