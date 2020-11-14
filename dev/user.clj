@@ -1,6 +1,6 @@
 (ns user
   (:require
-   [figwheel-sidecar.repl-api :as f]))
+    [figwheel-sidecar.repl-api :as f]))
 
 ;; user is a namespace that the Clojure runtime looks for and
 ;; loads if its available
@@ -18,6 +18,14 @@
 ;; tools.namespace https://github.com/clojure/tools.namespace
 ;; and Component https://github.com/stuartsierra/component
 
+
+(def figwheel-config
+  {:figwheel-options {:server-port 3449}
+   ;; builds to focus on
+   :build-ids        ["dev"]
+   ;; load build configs from project file
+   :all-builds       (figwheel-sidecar.config/get-project-builds)
+   })
 
 (defn fig-start
   "This starts the figwheel server and watch based auto-compiler."
@@ -42,4 +50,10 @@
   (f/cljs-repl))
 
 
-;(fig-start)
+(comment
+
+  (fig-start)
+
+  (cljs-repl)
+
+  )

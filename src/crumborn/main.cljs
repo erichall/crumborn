@@ -326,6 +326,7 @@
   (reagent/render-component [#'app app-state] (interop/get-element-by-id "app")))
 
 (defn on-js-reload []
+  (println "pop")
   (render (deref app-state-atom)))
 
 (interop/setup-listener! "resize"

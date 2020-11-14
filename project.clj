@@ -7,12 +7,12 @@
   :min-lein-version "2.9.1"
 
   :dependencies [[org.clojure/clojure "1.10.0"]
-                 [org.clojure/clojurescript "1.10.520"]
+                 [org.clojure/clojurescript "1.10.758"]
                  [org.clojure/core.async "0.4.500"]
                  [reagent "0.8.1"]
                  [markdown-to-hiccup "0.6.2"]
                  [cljs-http "0.1.46"]
-                 [com.taoensso/timbre "5.0.0"]]
+                 ]
 
   :plugins [[lein-figwheel "0.5.19"]
             [lein-cljsbuild "1.1.7" :exclusions [[org.clojure/clojure]]]]
@@ -65,6 +65,9 @@
              ;; Start an nREPL server into the running figwheel process
              ;; :nrepl-port 7888
 
+
+
+
              ;; Server Ring Handler (optional)
              ;; if you want to embed a ring handler into the figwheel http-kit
              ;; server, this is for simple ring servers, if this
@@ -96,7 +99,13 @@
              }
 
   :profiles {:dev  {:dependencies  [[binaryage/devtools "0.9.10"]
-                                    [figwheel-sidecar "0.5.19"]]
+                                    [figwheel-sidecar "0.5.19"]
+                                    [com.taoensso/timbre "5.0.0"]
+                                    [cider/piggieback "0.5.2"]
+                                    ]
+                    :repl-options  {:nrepl-middleware [cider.piggieback/wrap-cljs-repl]}
+
+                    :test-paths    ["src"]
 
                     ;; need to add dev source path here to get user.clj loaded
                     :source-paths  ["src" "dev"]
