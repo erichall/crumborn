@@ -16,4 +16,4 @@ pom.xml
 .rebel_readline_history
 .shadow-cljs/
 node_modules/
-
+resources/public/clojure/
