@@ -5,7 +5,7 @@
     [clojure.string :as s]
     [cljs.core.async :as async]
     [crumborn.interop :as interop]
-    [cljs.test :refer [is]]))
+    [cljs.test :refer [deftest is]]))
 
 (enable-console-print!)
 ;; TODO
@@ -203,6 +203,7 @@
   {:test (fn [] (is (= (insert-row-at {:buffer ["r1" "r2"]} 1 "new-row")
                        {:buffer ["r1" "new-row" "r2"]})))}
   [{:keys [buffer] :as state} row-number new-row]
+  (println " WHAT ON EARTH " buffer row-number new-row)
   (assoc state :buffer (vec (concat (subvec buffer 0 row-number) [new-row] (subvec buffer row-number)))))
 
 (defn cursor-end-of-row?
@@ -221,9 +222,10 @@
   [state row x]
   (subs row 0 (x->char-pos state x)))
 
-(defn last-char
-  [row]
-  (last row))
+(defn split-row-at
+  {:test (fn [] (is (= (split-row-at "hello everybody" 4) ["hell" "o everybody"])))}
+  [row i]
+  [(subs row 0 i) (subs row i)])
 
 (defn process-char
   [{:keys [char-width buffer cursor] :as state} key]
@@ -232,18 +234,33 @@
         cursor-x (get-in state [:cursor :x])
         pos (x->char-pos state cursor-x)
         new-row (str-insert row key pos)
-        overflow? (row-overflow? state row)]
-    (if overflow?
-      (if (cursor-end-of-row? state)
-        (-> (insert-row-at state (inc active-line) key)
-            inc-cursor-y
-            set-cursor-start
-            inc-cursor-x)
-        (-> (insert-row-at state (inc active-line) (last-char row))
-            (assoc-in [:buffer active-line] (str (first-of-row state row cursor-x) key))
-            inc-cursor-x))
-      (-> (assoc-in state [:buffer active-line] new-row)
-          inc-cursor-x))))
+        overflow? (row-overflow? state row)
+        eor? (cursor-end-of-row? state)]
+    ;; yeeeeees we cannot just inert a new row, we must check if the next row exsists, if it does, prepend the last char from the
+    ;; row above, oherwise insert a new row with the last char from the row above..................
+    (cond
+      (and overflow? eor?)
+      (-> (insert-row-at state (inc active-line) key)
+          inc-cursor-y
+          set-cursor-start
+          inc-cursor-x)
+
+      (and overflow? (not eor?))
+      (let [[first rest] (split-row-at row cursor-x)
+            _ (println "FIRST: " first "AND REST" rest " POS IS " pos)
+            a (->
+                (assoc-in state [:buffer active-line] (str first key (remove-last-char rest)))
+                (insert-row-at (inc active-line) (last row))
+                inc-cursor-x)]
+        (cljs.pprint/pprint (:buffer a))
+        a
+        )
+
+      :else
+      (-> (assoc-in state [:buffer active-line] (str-insert row key pos))
+          inc-cursor-x)
+      )
+    ))
 
 (defn empty-row?
   [state row-number]
@@ -516,7 +533,7 @@
                                                                           :cursor "text"}
                                                                     [:div {:style {:cursor      "text"
                                                                                    :font-family "monospace"
-                                                                                   :word-break  "break-all"
+                                                                                   :white-space "nowrap"
                                                                                    :display     "inline-block"
                                                                                    :width       "100%"
                                                                                    }}

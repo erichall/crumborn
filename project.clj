@@ -23,6 +23,8 @@
   {:builds
    [{:id           "dev"
      :source-paths ["src"]
+     ;; IT SEEEEEEEEEMS
+     ;; that this file is still needed by intellej after porting to shadow-cljs
 
      ;; The presence of a :figwheel configuration here
      ;; will cause figwheel to inject the figwheel client

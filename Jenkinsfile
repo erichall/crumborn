@@ -5,8 +5,7 @@ pipeline {
         stage('Build') {
             steps {
                echo 'Building..'
-               sh 'lein clean'
-               sh 'lein cljsbuild once min'
+               sh 'shadow-cljs release :app'
                echo 'Done building'
 
             }

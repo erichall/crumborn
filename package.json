@@ -1,0 +1,29 @@
+{
+  "name": "crumborn",
+  "version": "1.0.0",
+  "description": "It doesn't mean anything, it's my homepage. Free from enterprise extravaganza 👍",
+  "main": "main.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "create-react-class": "^15.7.0",
+    "react": "^16.9.0",
+    "react-dom": "^16.9.0",
+    "shadow-cljs": "^2.11.7"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erichall/crumborn.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/erichall/crumborn/issues"
+  },
+  "homepage": "https://github.com/erichall/crumborn#readme"
+}

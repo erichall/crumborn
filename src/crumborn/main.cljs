@@ -325,9 +325,7 @@
   [app-state]
   (reagent/render-component [#'app app-state] (interop/get-element-by-id "app")))
 
-(defn on-js-reload []
-  (println "pop")
-  (render (deref app-state-atom)))
+
 
 (interop/setup-listener! "resize"
                          (fn []
@@ -378,5 +376,13 @@
 
 (when (nil? (:channel (deref channel-atom)))
   (ws/make-websocket! (str (get-ws-url) "/api/ws/") handle-event!))
+
+(defn reload! []
+  (render (deref app-state-atom)))
+
+(defn init!
+  []
+  ;; TODO maybe put everything here :)
+  (log/debug "Initializing main..."))
 
 
