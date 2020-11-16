@@ -14,14 +14,21 @@
 ;; [X]  remove fetching row width and chars directly from the dom cus it messes up when removing chars..
 ;;        we should fetch it from the buffer instead and keep a fixed char-width as a style maybe??
 ;; []   Remove active-line and just get-it from cursor y pos?
+;; []   it seems to be impossible to rely on pre-line word wrapping since you are not able
+;;      to place the cursor on the invisible \n char that is not shown when wrapping..
+;;      I guess we have to roll back to manually dealing with rows, I guess we are better prepared this time
 
 (defn get-lines
   [buffer]
   (s/split-lines buffer))
 
+(defn approx=
+  [a b p]
+  (< (Math/abs (- a b)) p))
+
 (defonce state-atom (r/atom nil))
 (def initial-state
-  {:buffer      (get-lines "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n")
+  {:buffer      "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
    :selection   []
    :keys-down   #{}
    :cursor      {:x        0
@@ -36,7 +43,7 @@
    :char-width  nil                                         ; must measure this......
    :styles      {:line-height   21                          ; https://grtcalculator.com/
                  :font-size     12
-                 :editor-width  500
+                 :editor-width  100
                  :editor-height 900}
    })
 
@@ -53,9 +60,81 @@
     (interop/setup-listener! element type (fn [evt] (async/put! out evt)))
     out))
 
+
+(defn partition-buffer
+  "Partitions a buffer into rows by first splitting at \n and then
+  applying max amount of chars in one row and splitting there after.
+
+  PROBLEM y->row
+  now when we use a gap buffer, it seems to be difficult to map y to a row,
+  we need the row because we need to clamp the cursor to maximum of the row length.
+  This layout:
+  |123____|
+  |11_____|
+  |1234567| < overflow no \n
+  |89_____|
+  would look like this in the gap-buffer
+  123\n11\n123456789
+  => split nl => [123, 11, 123456789]
+  say each char is 1 coordinate px, clicking on [3,2] => 4, i.e index 10, clicking on [1,3] => 0, i.e index 15\n,
+  do we have a 2d array if we split it maybe => [123,     11,\n;;     123456789]
+  we could of course, count, each newline and each overflow, maybe, if we chunk the gap-buffer up in either
+  [\n] or by [max char width] we actually get the rows, so first, split by, then iterate through and split by max-width?
+  I guess this is really bad performance wise but...... :)
+  "
+  {:test (fn []
+           (is (= (partition-buffer "123\n11\n123456789" 1 7)
+                  ["123" "11" "1234567" "89"]))
+           (is (= (partition-buffer "" 1 7) [""]))
+           (is (= (partition-buffer "dont" 1 7) ["dont"])))}
+  [buffer char-width editor-width]
+  (let [max-chars (/ editor-width char-width)]
+    (->> (s/split-lines buffer)
+         ;(map (fn [r] (str r "\n")))
+         (reduce (fn [rows row]
+                   (let [width (* char-width (count row))]
+                     (if (> width editor-width)
+                       (->> (concat rows (->> (split-at max-chars row)
+                                              (map (partial s/join ""))
+                                              ))
+                            (into []))
+                       (conj rows row)))) []))))
+
+(defn y->row
+  "Maps a y-coordinate to a row.
+  if y > buffer length, return last row
+  will this bite us around soon?"
+  {:test (fn []
+           (let [state {:buffer     "123\n11\n123456789\n44"
+                        :char-width 1
+                        :styles     {:editor-width 7}}]
+             (is (= (y->row state 0)) "123")
+             (is (= (y->row state 1)) "11")
+             (is (= (y->row state 2)) "1234567")
+             (is (= (y->row state 3)) "89")
+             (is (= (y->row state 4)) "44")
+             (is (= (y->row state 5)) "44")))}              ;; out of bounds
+  [{:keys [buffer char-width styles] :as state} y]
+  (let [rows (partition-buffer buffer char-width (editor-width state))
+        y-row (int (Math/floor (/ y (:line-height styles))))]
+    (if (> y-row (dec (count rows)))
+      (last rows)
+      (nth rows y-row))))
+
+(defn y->row-index
+  [{:keys [buffer char-width styles] :as state} y]
+  (let [rows (partition-buffer buffer char-width (editor-width state))
+        y-row (int (Math/floor (/ y (:line-height styles))))]
+    (if (> y-row (dec (count rows)))
+      (dec (count rows))
+      y-row)))
+
 (defn get-row
-  [{:keys [buffer]} row-number]
-  (nth buffer row-number))
+  [{:keys [buffer char-width] :as state} row-number]
+  (let [rows (partition-buffer buffer char-width (editor-width state))]
+    (if (< row-number (count rows))
+      (nth rows row-number)
+      (last rows))))
 
 (defn get-row-length
   [state row-number]
@@ -75,48 +154,23 @@
   [row-number]
   (str "row-" row-number))
 
-(defn row-heights
-  [{:keys [char-width buffer styles]}]
-  (reduce (fn [acc [i row]]
-            ;; span is the number of how many rows this row spans, if it's exceeds width it will span another row
-            (let [{:keys [line-height editor-width]} styles
-                  span (Math/max 1                          ;; 1 for empty rows
-                                 (Math/ceil (/
-                                              (* char-width (count row))
-                                              editor-width  ;; either take this or query it from the dom?
-                                              )))]
-              (conj acc {:row          i
-                         :span         span
-                         :inner-lines  (map (fn [r] (* r i line-height)) (range 1 (inc span)))
-                         :total-height (* span line-height)
-                         :span-start   (* i line-height)
-                         :span-end     (+ (* i line-height)
-                                          (* span line-height))}
-                    ))) [] (map vector (range (count buffer)) buffer)))
-
-;; TODO
-(defn y->row
-  [{:keys [buffer styles] :as state} y]
-  (let [a (->> (row-heights state)
-               (some (fn [{:keys [span-start span-end] :as s}]
-                       (when (and (>= y span-start) (< y span-end))
-                         s)))
-               ;(Math/min (dec (count buffer)))
-               )
-        b (reduce (fn [prev cur]
-                    (if (< (Math/abs (- cur y)) (Math/abs (- prev y)))
-                      cur
-                      prev
-                      )) -1 (:inner-lines a))]
-    (:row a)
-    ))
-
 (defn clamp-to-chars
-  [{:keys [char-width] :as state} row-number value]
+  {:test (fn []
+           (is (= (clamp-to-chars {:char-width 1} "hej" 1.6) 2))
+           (is (= (clamp-to-chars {:char-width 1} "hej" 1.5) 1))
+           (is (= (clamp-to-chars {:char-width 1} "hej" 1.3) 1))
+           (is (= (clamp-to-chars {:char-width 1} "hej" 10) 3))
+           (is (= (clamp-to-chars {:char-width 1} "hej" 0.3) 0)))}
+  [{:keys [char-width]} row value]
   {:pre  [(interop/not-nan? value)]
    :post [(double? %) (interop/not-nan? %)]}
-  (let [chars (get-row-length state row-number)]
-    (* char-width (min chars (Math/round (/ value char-width))))))
+  (let [mid-range (/ char-width 2)
+        value-range (mod value char-width)
+        row-length (count row)
+        clamped-val (if (<= value-range mid-range)
+                      (- value value-range)
+                      (+ char-width (- value value-range)))]
+    (max 0 (min (* char-width row-length) clamped-val))))
 
 (defn clamp-cursor
   "Clamp x-position of cursor position between chars"
@@ -126,7 +180,7 @@
 
 (defn get-active-row
   [{:keys [cursor] :as state}]
-  (get-row state (y->row state (:y cursor))))
+  (get-row state (y->row-index state (:y cursor))))
 
 (defn inc-cursor-x
   "Increase cursor position x with one char"
@@ -136,15 +190,15 @@
 (defn dec-cursor-x
   "Decrease cursor position x with one char"
   [{:keys [cursor char-width] :as state}]
-  (let [active-line (y->row state (:y cursor))]
+  (let [row (y->row state (:y cursor))]
     (update-in state [:cursor :x] #(max 0 (->> (- % char-width)
-                                               (clamp-to-chars state active-line))))))
+                                               (clamp-to-chars state row))))))
 
 (defn set-cursor-end-of-row
-  [state row-number]
-  {:pre [(>= row-number 0)]}
-  (->> (get-row-width state row-number)
-       (clamp-to-chars state row-number)))
+  [state y]
+  {:pre [(>= y 0)]}
+  (let [row (y->row state y)]
+    (clamp-to-chars state row (count row))))
 
 (defn set-cursor
   [state x y]
@@ -203,13 +257,12 @@
   {:test (fn [] (is (= (insert-row-at {:buffer ["r1" "r2"]} 1 "new-row")
                        {:buffer ["r1" "new-row" "r2"]})))}
   [{:keys [buffer] :as state} row-number new-row]
-  (println " WHAT ON EARTH " buffer row-number new-row)
   (assoc state :buffer (vec (concat (subvec buffer 0 row-number) [new-row] (subvec buffer row-number)))))
 
 (defn cursor-end-of-row?
   [{:keys [char-width cursor] :as state}]
   (< (- (editor-width state)
-        (+ char-width (:x cursor)))
+        (- (:x cursor) char-width))
      char-width))
 
 (defn rest-of-row
@@ -228,39 +281,44 @@
   [(subs row 0 i) (subs row i)])
 
 (defn process-char
-  [{:keys [char-width buffer cursor] :as state} key]
-  (let [row (get-active-row state)
-        active-line (y->row state (:y cursor))
-        cursor-x (get-in state [:cursor :x])
-        pos (x->char-pos state cursor-x)
-        new-row (str-insert row key pos)
-        overflow? (row-overflow? state row)
-        eor? (cursor-end-of-row? state)]
-    ;; yeeeeees we cannot just inert a new row, we must check if the next row exsists, if it does, prepend the last char from the
-    ;; row above, oherwise insert a new row with the last char from the row above..................
-    (cond
-      (and overflow? eor?)
-      (-> (insert-row-at state (inc active-line) key)
-          inc-cursor-y
-          set-cursor-start
-          inc-cursor-x)
+  "
+ is it:
+   |123____|
+   |11_____|
+   |1234567| < overflow
+   |89_____|
+   123\n11\n123456789\n
+   [2,3] =>
+  "
+  [{:keys [char-width cursor buffer] :as state} key]
+  (let [r (partition-buffer buffer char-width (editor-width state))
+        rows (mapv (fn [ra] (s/replace-all ra #"\n" "")) r)
+        row-index (y->row-index state (:y cursor))
+        i (+ (count (s/join "" (subvec rows 0 row-index))) (x->char-pos state (:x cursor)))
+        before (subs buffer 0 i)
+        after (subs buffer i)
+        ]
+    (-> (assoc state :buffer (str-insert buffer key i))
+        inc-cursor-x
+        (as-> s
+              (if (cursor-end-of-row? s)
+                (do
+                  (-> (inc-cursor-y s)
+                      set-cursor-start
+                      inc-cursor-x
+                      ))
+                s)
+              )
+        )))
 
-      (and overflow? (not eor?))
-      (let [[first rest] (split-row-at row cursor-x)
-            _ (println "FIRST: " first "AND REST" rest " POS IS " pos)
-            a (->
-                (assoc-in state [:buffer active-line] (str first key (remove-last-char rest)))
-                (insert-row-at (inc active-line) (last row))
-                inc-cursor-x)]
-        (cljs.pprint/pprint (:buffer a))
-        a
-        )
-
-      :else
-      (-> (assoc-in state [:buffer active-line] (str-insert row key pos))
-          inc-cursor-x)
-      )
-    ))
+;(process-char {:char-width 1
+;               :cursor     {:x 1 :y 2}
+;               :styles     {:editor-width 7
+;                            :line-height  1}
+;               :buffer     "123\n11\n123456789\n"}
+;              "Q")
+;
+;(partition-buffer "123\n11\n123456789\n" 1 7)
 
 (defn empty-row?
   [state row-number]
@@ -275,7 +333,7 @@
       (-> (remove-row state active-line)                    ;; TODO this is broken, cursor jumps to first line
           (update :active-line #(max 0 (dec (:active-line %))))
           (assoc-in [:cursor :y] (dec-cursor-y (:y cursor) (:line-height styles)))
-          (assoc-in [:cursor :x] (set-cursor-end-of-row state (:active-line state))))
+          (assoc-in [:cursor :x] (set-cursor-end-of-row state (:y cursor))))
       ;(= 0 (:x cursor)) ;; TODO handle remove line and put rest of line into the one above
       :else
       (let [pos (x->char-pos state (- (:x cursor) 1))]
@@ -369,51 +427,55 @@
 
 (defn selection-x->end
   "position of a row from x to the end of that row"
-  [state row-num x full-width line-height]
-  {:width (clamp-to-chars state row-num (- full-width x))
+  [state row row-num x full-width line-height]
+  {:width (clamp-to-chars state row (- full-width x))
    :top   (selection-top-dist row-num line-height)
-   :left  (clamp-to-chars state row-num x)})
+   :left  (clamp-to-chars state row x)})
 
 (defn selection-zero->x
   "position of a row from start of the row to coordinate x"
-  [state row-num x line-height]
-  {:width (clamp-to-chars state row-num x)
+  [state row row-num x line-height]
+  {:width (clamp-to-chars state row x)
    :top   (selection-top-dist row-num line-height)
    :left  0})
 
 (defn selection-zero->end
   "position of a fully selected row"
-  [state line-height row-num]
-  (let [width (get-row-width state row-num)]
-    {:width (if (zero? width) 7.2 width)                    ;; TODO 7.2...
+  [{:keys [char-width] :as state} line-height row-num]
+  (let [width (* char-width (count (get-row state row-num)))]
+    {:width (if (zero? width) char-width width)             ;; TODO char-width..??
      :top   (selection-top-dist row-num line-height)
      :left  0}))
 
+;; TODO this is a mess now, must refactor
 (defn select-rows-between
-  [state a b line-height]
-  (let [fixed-row (y->row state (:y a))
+  [{:keys [char-width] :as state} a b line-height]
+  (let [fixed-row-index (y->row-index state (:y a))
+        moving-row-index (y->row-index state (:y b))
+        fixed-row (y->row state (:y a))
         moving-row (y->row state (:y b))
-        fixed-row-width (get-row-width state fixed-row)
-        moving-row-width (get-row-width state moving-row)
+        fixed-row-width (* (count fixed-row) char-width)
+        moving-row-width (* (count moving-row) char-width)
         fixed-x (min (:x a) fixed-row-width)
         moving-x (min (:x b) moving-row-width)]
-    (if (= fixed-row moving-row)                            ;; same row
-      [{:width (clamp-to-chars state fixed-row (min (Math/abs (- fixed-x moving-x)) fixed-row-width))
-        :top   (* fixed-row line-height)
-        :left  (clamp-to-chars state fixed-row (min fixed-x moving-x))}]
+    (if (= fixed-row-index moving-row-index)                ;; same row
+      (let [row (y->row state (:y a))]
+        [{:width (clamp-to-chars state row (min (Math/abs (- fixed-x moving-x)) fixed-row-width))
+          :top   (* fixed-row-index line-height)
+          :left  (clamp-to-chars state row (min fixed-x moving-x))}])
       (concat                                               ;; either drag up or down for different rows
         (->>
-          (ge-sub fixed-row moving-row)                     ;; n-rows between start and end selection row ;; remove 1 cus of separate handling
+          (ge-sub fixed-row-index moving-row-index)         ;; n-rows between start and end selection row ;; remove 1 cus of separate handling
           dec
           (max 0)                                           ;; can't be < 0, no selections in this case
           range                                             ;; n-rows to be selected
-          (map #(+ % 1 (min fixed-row moving-row)))         ;; apply correct row-numbers for fully selected rows
+          (map #(+ % 1 (min fixed-row-index moving-row-index))) ;; apply correct row-numbers for fully selected rows
           (map (fn [row-num] (selection-zero->end state line-height row-num)))) ;; map full selection
-        (if (> fixed-row moving-row)
-          [(selection-x->end state moving-row moving-x moving-row-width line-height)
-           (selection-zero->x state fixed-row fixed-x line-height)]
-          [(selection-x->end state fixed-row fixed-x fixed-row-width line-height)
-           (selection-zero->x state moving-row moving-x line-height)])))))
+        (if (> fixed-row-index moving-row-index)
+          [(selection-x->end state moving-row moving-row-index moving-x moving-row-width line-height)
+           (selection-zero->x state fixed-row fixed-row-index fixed-x line-height)]
+          [(selection-x->end state fixed-row fixed-row-index fixed-x fixed-row-width line-height)
+           (selection-zero->x state moving-row moving-row-index moving-x line-height)])))))
 
 (defn process-mouse-move
   [state {:keys [js-evt]}]
@@ -519,13 +581,14 @@
                                                       :background          "#ecece7"
                                                       :width               (str (get-in @state-atom [:styles :editor-width]) "px")
                                                       :outline             "none"
-                                                      ;:white-space         "pre-wrap"
                                                       :-webkit-user-select "none"
                                                       :cursor              "text"
-                                                      :z-index             -1
-                                                      :top                 (str (* (get-in @state-atom [:styles :line-height]) (y->row @state-atom (get-in @state-atom [:cursor :y]))) "px") ;; TODO
+                                                      :z-index             -2
+                                                      :top                 (str (* (get-in @state-atom [:styles :line-height]) (y->row-index @state-atom (get-in @state-atom [:cursor :y]))) "px") ;; TODO
                                                       :height              (str (get-in @state-atom [:styles :line-height]) "px")
                                                       :line-height         (str (get-in @state-atom [:styles :line-height]) "px")
+                                                      :word-break          "break-all"
+                                                      :white-space         "pre"
                                                       :font-family         "monospace"
                                                       :font-size           (str (get-in @state-atom [:styles :font-size]) "px")}}]
                                   (doall (map-indexed (fn [i line] [:div {:key    (str "row-" i)
@@ -538,13 +601,14 @@
                                                                                    :width       "100%"
                                                                                    }}
                                                                      line
-                                                                     ]]) buffer))]
+                                                                     ]]) (partition-buffer buffer char-width (editor-width @state-atom))))
+                                  ]
                                  [:div {:id         "selections"
                                         :draggable  false
                                         :tab-index  -1
                                         :userselect "none"
                                         :style      {:position            "absolute"
-                                                     :z-index             -1
+                                                     :z-index             -2
                                                      :width               (str (get-in @state-atom [:styles :editor-width]) "px")
                                                      :height              (str (get-in @state-atom [:styles :editor-height]) "px")
                                                      :outline             "none"
@@ -567,7 +631,7 @@
                                   ]
                                  [:div {:id    "caret"
                                         :style {
-                                                :transform (str "translate(" (get-in @state-atom [:cursor :x]) "px," (* (get-in @state-atom [:styles :line-height]) (y->row @state-atom (get-in @state-atom [:cursor :y]))) "px)") ;; TODO
+                                                :transform (str "translate(" (get-in @state-atom [:cursor :x]) "px," (* (get-in @state-atom [:styles :line-height]) (y->row-index @state-atom (get-in @state-atom [:cursor :y]))) "px)") ;; TODO
                                                 :animation "typing 3.5s steps(40, end),  blink-caret .75s step-end infinite"
                                                 :opacity   "0.3"
                                                 :display   "block"

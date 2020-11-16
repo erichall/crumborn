@@ -66,7 +66,7 @@
 
   [:div {:style {:padding-top "20px"}}
    [:p (get-in page-state [:intro])]
-   [:p (get-in page-state [:about])]]
+  [:p (get-in page-state [:about])]]
   )
 
 (defn dashboard
