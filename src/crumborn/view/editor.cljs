@@ -26,6 +26,36 @@
   [a b p]
   (< (Math/abs (- a b)) p))
 
+(defn txt->buffer
+  "
+  split text on \n and max row width into a 2d array
+   [
+   [a]
+   [this is, a edit, or]
+   [with te, xt!]
+   [hejsan]
+   ]
+  "
+  {:test (fn []
+           (is (= (txt->buffer "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n" 1 7)
+                  [["a"]
+                   ["This is" " a edit" "or"]
+                   ["with te" "xt!"]
+                   ["a"]
+                   ["."]
+                   [""]
+                   [""]
+                   ["hejsan"]
+                   ])))}
+  [txt char-width editor-width]
+  (let [max-chars (/ editor-width char-width)]
+    (->> (s/split-lines txt)
+         (reduce (fn [buffer row]
+                   (if (empty? row)
+                     (conj buffer [""])
+                     (conj buffer (->> (partition-all max-chars row)
+                                       (mapv (partial s/join "")))))) []))))
+
 (defonce state-atom (r/atom nil))
 (def initial-state
   {:buffer      "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
@@ -105,7 +135,7 @@
   if y > buffer length, return last row
   will this bite us around soon?"
   {:test (fn []
-           (let [state {:buffer     "123\n11\n123456789\n44"
+           (let [state {:buffer     (txt->buffer "123\n11\n123456789\n44" 1 7)
                         :char-width 1
                         :styles     {:editor-width 7}}]
              (is (= (y->row state 0)) "123")
@@ -114,24 +144,20 @@
              (is (= (y->row state 3)) "89")
              (is (= (y->row state 4)) "44")
              (is (= (y->row state 5)) "44")))}              ;; out of bounds
-  [{:keys [buffer char-width styles] :as state} y]
-  (let [rows (partition-buffer buffer char-width (editor-width state))
-        y-row (int (Math/floor (/ y (:line-height styles))))]
-    (if (> y-row (dec (count rows)))
-      (last rows)
-      (nth rows y-row))))
+  [{:keys [buffer styles]} y]
+  (let [yy (int (Math/floor (/ y (:line-height styles))))
+        flat-buffer (flatten buffer)]
+    (nth flat-buffer (min (- (count flat-buffer) 1) yy))))
 
 (defn y->row-index
-  [{:keys [buffer char-width styles] :as state} y]
-  (let [rows (partition-buffer buffer char-width (editor-width state))
-        y-row (int (Math/floor (/ y (:line-height styles))))]
-    (if (> y-row (dec (count rows)))
-      (dec (count rows))
-      y-row)))
+  [{:keys [buffer styles]} y]
+  (let [yy (int (Math/floor (/ y (:line-height styles))))
+        flat-buffer (flatten buffer)]
+    (min (dec (count flat-buffer)) yy)))
 
 (defn get-row
-  [{:keys [buffer char-width] :as state} row-number]
-  (let [rows (partition-buffer buffer char-width (editor-width state))]
+  [{:keys [buffer]} row-number]
+  (let [rows (flatten buffer)]
     (if (< row-number (count rows))
       (nth rows row-number)
       (last rows))))
@@ -176,7 +202,6 @@
   "Clamp x-position of cursor position between chars"
   [state {:keys [x y] :as mouse}]
   (assoc mouse :x (clamp-to-chars state (y->row state y) x)))
-
 
 (defn get-active-row
   [{:keys [cursor] :as state}]
@@ -280,45 +305,128 @@
   [row i]
   [(subs row 0 i) (subs row i)])
 
+(defn y->buffer-cord
+  {:test (fn []
+           "
+           How the actual editor looks when split into rows
+            a
+            This is
+            a edit
+            or
+            with te
+            xt
+            a
+            .
+
+
+            hejsan"
+           (let [buffer [["a"]
+                         ["This is" " a edit" "or"]
+                         ["with te" "xt!"]
+                         ["a"]
+                         ["."]
+                         [""]
+                         [""]
+                         ["hejsan"]
+                         ]]
+             (is (= (y->buffer-cord buffer 0) [0 0]))
+             (is (= (y->buffer-cord buffer 1) [1 0]))
+             (is (= (y->buffer-cord buffer 2) [1 1]))
+             (is (= (y->buffer-cord buffer 3) [1 2]))
+             (is (= (y->buffer-cord buffer 4) [2 0]))
+             (is (= (y->buffer-cord buffer 5) [2 1]))
+             (is (= (y->buffer-cord buffer 6) [3 0]))
+             (is (= (y->buffer-cord buffer 7) [4 0]))))}
+  [buffer row-num]
+  (reduce (fn [[i j] row-group]
+            (let [rg-len (count row-group)]
+              (if (> (+ i rg-len) row-num)
+                (reduced [j (- row-num i)])
+                [(+ i rg-len) (inc j)]
+                ))) [0 0] buffer))
+
+(defn partition-buffer-row
+  [buffer-row max-row-len]
+  (->> (mapv (fn [r]
+               (->> (partition-all max-row-len r)
+                    (mapv (partial s/join "")))
+               ) buffer-row)
+       flatten
+       (into [])))
+
 (defn process-char
   "
- is it:
-   |123____|
-   |11_____|
-   |1234567| < overflow
-   |89_____|
-   123\n11\n123456789\n
-   [2,3] =>
-  "
-  [{:keys [char-width cursor buffer] :as state} key]
-  (let [r (partition-buffer buffer char-width (editor-width state))
-        rows (mapv (fn [ra] (s/replace-all ra #"\n" "")) r)
-        row-index (y->row-index state (:y cursor))
-        i (+ (count (s/join "" (subvec rows 0 row-index))) (x->char-pos state (:x cursor)))
-        before (subs buffer 0 i)
-        after (subs buffer i)
-        ]
-    (-> (assoc state :buffer (str-insert buffer key i))
-        inc-cursor-x
-        (as-> s
-              (if (cursor-end-of-row? s)
-                (do
-                  (-> (inc-cursor-y s)
-                      set-cursor-start
-                      inc-cursor-x
-                      ))
-                s)
-              )
-        )))
+  [
+   ['a']
+   ['This is' ' a edit' 'or']
+   ['with te' 'xt!']
+   ['a']
+   ['.']
+   ['']
+   ['']
+   ['hejsan']
+   ]
 
-;(process-char {:char-width 1
-;               :cursor     {:x 1 :y 2}
-;               :styles     {:editor-width 7
-;                            :line-height  1}
-;               :buffer     "123\n11\n123456789\n"}
-;              "Q")
-;
-;(partition-buffer "123\n11\n123456789\n" 1 7)
+   ['a', 'this is', ' a edit' 'or' 'wih te' 'xy!']
+
+   x = i % width
+   y = i / width
+
+  click ['or'] => 3,
+  rows before 1, i should be 5
+
+  click ['xt!'] => 5
+  rows before 2, r0 pad 2, r1 pad 0, should be 7
+
+  click ['.'] => 7
+  rows before 4, r0 pad2, r1 pad0, r2 pad2, r3 pad2, should be 13
+
+   does not work since the rows are not padded correct
+   what if we add the paddings to the index
+   so clicking on row 3, is actually index 5, since row0 is 2 padded
+
+   gash this sucks
+
+   lets say we have it like this,
+   the rendering handles all row width and \n and we only deal with one long string
+   so
+
+   the string would look like:
+   'a\nthis is editor with text!\na\n.\n\nhejsan\n'
+
+   where txt->buffer deals with rendering into rows and such
+   we then get a mouse click; x,y (1 char = 1 px, 1 row = 1 px)
+
+   (3,1) is the 's' on the second row.
+
+   how would we map this to our buffer?
+   line-height * 1 + 3 = 4, is 1 off because of the newline
+   what if we just remove all the \n in our text
+   'a\nthis is editor with text!\na\n.\n\nhejsan\n'\n
+   =>
+   'athis is editor with text!a.hejsan
+
+  line-height * 1 + 3 = 4 => s!
+  (1,2) is the r in 'or'
+
+  line-height * 2 + 1 = 3
+  noep this wont work..
+
+  if we find the line, that is given by the input, this case 2.
+  and we take all the rows before that line and sum the length of them up
+  but this approach does not have any concept of rows........
+
+   "
+  [{:keys [char-width cursor buffer] :as state} key]
+  (let [row-num (y->row-index state (:y cursor))
+        [by bx] (y->buffer-cord buffer row-num)
+        row (get-in buffer [by bx])
+        x-offset (/ (:x cursor) char-width)
+        max-chars (/ (editor-width state) char-width)]
+    (-> (assoc-in state [:buffer by bx] (str-insert row key x-offset))
+        (as-> state
+              (assoc-in state [:buffer by] (partition-buffer-row (get-in state [:buffer by]) max-chars)))
+        inc-cursor-x)))
 
 (defn empty-row?
   [state row-number]
@@ -508,7 +616,11 @@
     :mouse-event (swap! state-atom (fn [state] (if-let [new-state (handle-mouse-event state data)]
                                                  new-state
                                                  state)))
-    :measure-char (swap! state-atom assoc :char-width (:char-width data))
+    :measure-char (swap! state-atom assoc
+                         :char-width (:char-width data)
+                         :buffer (txt->buffer (:buffer @state-atom)
+                                              (:char-width data)
+                                              (editor-width @state-atom)))
     (js/console.warn "Unable to handle event" name data)))
 
 (defn editor
@@ -588,20 +700,24 @@
                                                       :height              (str (get-in @state-atom [:styles :line-height]) "px")
                                                       :line-height         (str (get-in @state-atom [:styles :line-height]) "px")
                                                       :word-break          "break-all"
-                                                      :white-space         "pre"
                                                       :font-family         "monospace"
                                                       :font-size           (str (get-in @state-atom [:styles :font-size]) "px")}}]
-                                  (doall (map-indexed (fn [i line] [:div {:key    (str "row-" i)
-                                                                          :id     (str "row-" i)
-                                                                          :cursor "text"}
-                                                                    [:div {:style {:cursor      "text"
-                                                                                   :font-family "monospace"
-                                                                                   :white-space "nowrap"
-                                                                                   :display     "inline-block"
-                                                                                   :width       "100%"
-                                                                                   }}
-                                                                     line
-                                                                     ]]) (partition-buffer buffer char-width (editor-width @state-atom))))
+                                  (when char-width
+                                    (doall (map-indexed (fn [i row-group] [:div {:key    (str "row-group-" i)
+                                                                                 :id     (str "row-group-" i)
+                                                                                 :cursor "text"}
+                                                                           [:div {:style {:cursor      "text"
+                                                                                          :font-family "monospace"
+                                                                                          :white-space "nowrap"
+                                                                                          :display     "inline-block"
+                                                                                          :width       "100%"
+
+                                                                                          }}
+                                                                            (doall (map-indexed (fn [j row]
+                                                                                                  [:div {:id  (str "row-" j "-" i)
+                                                                                                         :key (str "row-" j "-" i)} row]
+                                                                                                  ) row-group))
+                                                                            ]]) buffer)))
                                   ]
                                  [:div {:id         "selections"
                                         :draggable  false
@@ -649,5 +765,4 @@
                                                   :font-size   (str (get-in @state-atom [:styles :font-size]) "px")
                                                   }
                                           } "!"])
-
                                  ]))})))
