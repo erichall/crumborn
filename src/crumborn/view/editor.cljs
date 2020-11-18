@@ -198,6 +198,7 @@
                       (+ char-width (- value value-range)))]
     (max 0 (min (* char-width row-length) clamped-val))))
 
+;; TODO this is frekking missleadidng fn.... and i guess its wrong??
 (defn clamp-cursor
   "Clamp x-position of cursor position between chars"
   [state {:keys [x y] :as mouse}]
@@ -237,12 +238,9 @@
   [{:keys [char-width]} x]
   (/ x char-width))
 
-;; TODO fix state mod here...
 (defn dec-cursor-y
-  [y line-height]
-  (if (<= y line-height)
-    y
-    (- y line-height)))
+  [{:keys [styles] :as state}]
+  (update-in state [:cursor :y] #(- % (:line-height styles))))
 
 (defn inc-cursor-y
   [{:keys [styles] :as state}]
@@ -272,11 +270,16 @@
       (+ char-width)                                        ;; plus the char to be added
       (> (:editor-width styles))))
 
+;; TODO check if this is correct and use it in remove-row, seeeeeems fishy.
+(defn drop-nth
+  [v i]
+  (vec (concat (subvec v 0 i) (subvec v (inc i)))))
+
 (defn remove-row
   {:test (fn [] (is (= (remove-row {:buffer ["r1" "r2" "r3"]} 1)
                        {:buffer ["r1" "r3"]})))}
   [{:keys [buffer] :as state} row-number]
-  (assoc state :buffer (vec (concat (subvec buffer 0 row-number) (subvec buffer (inc row-number))))))
+  (assoc state :buffer (drop-nth buffer row-number)))
 
 (defn insert-row-at
   {:test (fn [] (is (= (insert-row-at {:buffer ["r1" "r2"]} 1 "new-row")
@@ -289,6 +292,10 @@
   (< (- (editor-width state)
         (- (:x cursor) char-width))
      char-width))
+
+(defn cursor-first-of-row?
+  [{:keys [cursor]}]
+  (zero? (:x cursor)))
 
 (defn rest-of-row
   "Get chars after x, INCLUDING x"
@@ -339,116 +346,118 @@
              (is (= (y->buffer-cord buffer 7) [4 0]))))}
   [buffer row-num]
   (reduce (fn [[i j] row-group]
-            (let [rg-len (count row-group)]
+            (let [rg-len (if (empty? row-group)
+                           1
+                           (count row-group))]
               (if (> (+ i rg-len) row-num)
                 (reduced [j (- row-num i)])
-                [(+ i rg-len) (inc j)]
-                ))) [0 0] buffer))
+                [(+ i rg-len) (inc j)]))) [0 0] buffer))
 
 (defn partition-buffer-row
   [buffer-row max-row-len]
   (->> (mapv (fn [r]
                (->> (partition-all max-row-len r)
-                    (mapv (partial s/join "")))
-               ) buffer-row)
+                    (mapv (partial s/join "")))) buffer-row)
        flatten
        (into [])))
 
 (defn process-char
-  "
-  [
-   ['a']
-   ['This is' ' a edit' 'or']
-   ['with te' 'xt!']
-   ['a']
-   ['.']
-   ['']
-   ['']
-   ['hejsan']
-   ]
-
-   ['a', 'this is', ' a edit' 'or' 'wih te' 'xy!']
-
-   x = i % width
-   y = i / width
-
-  click ['or'] => 3,
-  rows before 1, i should be 5
-
-  click ['xt!'] => 5
-  rows before 2, r0 pad 2, r1 pad 0, should be 7
-
-  click ['.'] => 7
-  rows before 4, r0 pad2, r1 pad0, r2 pad2, r3 pad2, should be 13
-
-   does not work since the rows are not padded correct
-   what if we add the paddings to the index
-   so clicking on row 3, is actually index 5, since row0 is 2 padded
-
-   gash this sucks
-
-   lets say we have it like this,
-   the rendering handles all row width and \n and we only deal with one long string
-   so
-
-   the string would look like:
-   'a\nthis is editor with text!\na\n.\n\nhejsan\n'
-
-   where txt->buffer deals with rendering into rows and such
-   we then get a mouse click; x,y (1 char = 1 px, 1 row = 1 px)
-
-   (3,1) is the 's' on the second row.
-
-   how would we map this to our buffer?
-   line-height * 1 + 3 = 4, is 1 off because of the newline
-   what if we just remove all the \n in our text
-   'a\nthis is editor with text!\na\n.\n\nhejsan\n'\n
-   =>
-   'athis is editor with text!a.hejsan
-
-  line-height * 1 + 3 = 4 => s!
-  (1,2) is the r in 'or'
-
-  line-height * 2 + 1 = 3
-  noep this wont work..
-
-  if we find the line, that is given by the input, this case 2.
-  and we take all the rows before that line and sum the length of them up
-  but this approach does not have any concept of rows........
-
-   "
   [{:keys [char-width cursor buffer] :as state} key]
-  (let [row-num (y->row-index state (:y cursor))
-        [by bx] (y->buffer-cord buffer row-num)
+  (let [[by bx] (->>
+                  (y->row-index state (:y cursor))
+                  (y->buffer-cord buffer))
         row (get-in buffer [by bx])
-        x-offset (/ (:x cursor) char-width)
-        max-chars (/ (editor-width state) char-width)]
-    (-> (assoc-in state [:buffer by bx] (str-insert row key x-offset))
-        (as-> state
-              (assoc-in state [:buffer by] (partition-buffer-row (get-in state [:buffer by]) max-chars)))
+        max-chars (/ (editor-width state) char-width)
+        line-group (->>
+                     (/ (:x cursor) char-width)
+                     (str-insert row key)
+                     (assoc (get-in state [:buffer by]) bx)
+                     (s/join "")
+                     (partition-all max-chars)
+                     (mapv (partial s/join "")))]
+    (-> (assoc-in state [:buffer by] line-group)
+        (#(if (cursor-end-of-row? %)
+            (do
+              (-> (inc-cursor-y %)
+                  set-cursor-start))
+            %))
         inc-cursor-x)))
 
 (defn empty-row?
   [state row-number]
   (empty? (get-row state row-number)))
 
-;; TODO handle if cursor is first on row and if no more rows above
 (defn process-backspace
-  [{:keys [cursor buffer styles] :as state}]
-  (let [active-line (y->row state (:y cursor))]
+  "Some cases:
+  1) just delete a char anywhere but the firs on a row
+  2) delete the first \n i.e merge two lines
+  3) delete at index (0,0)
+
+  1) is ez, 3) just an edge case
+  2) needs thinking...
+  in 2) we need to take the the first row in the current
+  row-group and merge that with the last row in the row-group above.
+  Special care needs to be taken when dealing with line 0,
+  but that can never happen.
+  also, if the row-group only contains one row, we nee to delete the whole row.!
+
+  appratanly 1) is not that trivial since we need to shift the whole row-group back 1 step :D
+
+  We also forgot one important case.
+  4) if the row is empty, delete the whole row
+
+  super grow flaw we had..
+  we cant just check if cursor is first in row, we must check if the current row is first in the
+  row-group....
+
+  TODO soemthing is fishy when removing rows
+  "
+  [{:keys [cursor buffer char-width styles] :as state}]
+  (let [row-index (y->row-index state (:y cursor))
+        [by bx] (y->buffer-cord buffer row-index)
+        row (get-in buffer [by bx])
+        max-chars (/ (editor-width state) char-width)]
     (cond
-      (empty-row? state active-line)
-      (-> (remove-row state active-line)                    ;; TODO this is broken, cursor jumps to first line
-          (update :active-line #(max 0 (dec (:active-line %))))
-          (assoc-in [:cursor :y] (dec-cursor-y (:y cursor) (:line-height styles)))
-          (assoc-in [:cursor :x] (set-cursor-end-of-row state (:y cursor))))
-      ;(= 0 (:x cursor)) ;; TODO handle remove line and put rest of line into the one above
+
+      (and (cursor-first-of-row? state) (> bx 0))
+      (let [prev-row (get-in state [:buffer by (dec bx)])
+            del-row (remove-last-char prev-row)
+            row-group (->> (assoc (get-in state [:buffer by]) (dec bx) (str del-row row))
+                           (#(drop-nth % bx))
+                           (s/join "")
+                           (partition-all max-chars)
+                           (mapv (partial s/join "")))]
+        (->
+          (assoc-in state [:buffer by] row-group)
+          (set-cursor (* char-width (count del-row)) (- (:y cursor) (:line-height styles)))))
+
+      (and (cursor-first-of-row? state) (zero? bx) (> row-index 0))
+      (let [row-group-above (get-in state [:buffer (dec by)])
+            row-above (last row-group-above)
+            new-row-group-above (->> (conj (into [] (butlast row-group-above)) (str row-above row))
+                                     (s/join "")
+                                     (partition-all max-chars)
+                                     (mapv (partial s/join "")))]
+        (->
+          (assoc-in state [:buffer (dec by)] new-row-group-above)
+          (assoc-in [:buffer by] (into [] (butlast (get-in buffer [by]))))
+          (#(if (empty? (get-in % [:buffer by]))
+              (remove-row % row-index)
+              %))
+          (set-cursor (* char-width (count row-above)) (- (:y cursor) (:line-height styles)))))
+
       :else
-      (let [pos (x->char-pos state (- (:x cursor) 1))]
-        (->>
-          (remove-char-at (nth buffer active-line) pos)
-          (assoc-in state [:buffer active-line])
+      (let [row-group (get-in state [:buffer by])]
+        (->
+          (assoc-in state [:buffer by] (->>
+                                         (assoc row-group bx (remove-char-at row (/
+                                                                                   (- (:x cursor) char-width)
+                                                                                   char-width)))
+                                         (s/join "")
+                                         (partition-all max-chars)
+                                         (mapv (partial s/join ""))))
           dec-cursor-x)))))
+
 
 (defn process-key-down
   [state {:keys [key]}]
@@ -653,7 +662,7 @@
                               (let [{:keys [buffer selections char-width]} @state-atom]
                                 ;(cljs.pprint/pprint @state-atom)
                                 ;(println (s/split-lines (:uffer @state-atom)))
-                                [:div
+                                [:div {:on-click (fn [] (.focus (interop/get-element-by-id "editor-input")))}
                                  [:div {:style {:margin-bottom "20px"}} "toolbar"]
                                  [:textarea {:id          "editor-input"
                                              :on-blur     (fn [] (.focus (interop/get-element-by-id "editor-input")))
@@ -714,8 +723,9 @@
 
                                                                                           }}
                                                                             (doall (map-indexed (fn [j row]
-                                                                                                  [:div {:id  (str "row-" j "-" i)
-                                                                                                         :key (str "row-" j "-" i)} row]
+                                                                                                  [:div {:id    (str "row-" j "-" i)
+                                                                                                         :key   (str "row-" j "-" i)
+                                                                                                         :style {:white-space "pre"}} row]
                                                                                                   ) row-group))
                                                                             ]]) buffer)))
                                   ]
