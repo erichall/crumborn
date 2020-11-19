@@ -64,7 +64,8 @@
    :cursor      {:x        0
                  :x-screen 0
                  :y        0
-                 :y-screen 0}
+                 :y-screen 0
+                 :max-x    nil}
    :mouse       {:is-down false
                  :start   {:x 0 :x-screen 0 :y 0 :y-screen 0}
                  :end     {:x 0 :x-screen 0 :y 0 :y-screen 0}}
@@ -90,6 +91,10 @@
     (interop/setup-listener! element type (fn [evt] (async/put! out evt)))
     out))
 
+(defn split-str
+  [s i]
+  (->> (split-at i s)
+       (mapv (partial s/join ""))))
 
 (defn partition-buffer
   "Partitions a buffer into rows by first splitting at \n and then
@@ -162,24 +167,6 @@
       (nth rows row-number)
       (last rows))))
 
-(defn get-row-length
-  [state row-number]
-  (count (get-row state row-number)))
-
-(defn get-row-width
-  [{:keys [char-width] :as state} row-num]
-  {:pre  [(int? row-num)]
-   :post [(interop/not-nan? %) (double? %)]}
-  (* (get-row-length state row-num) char-width))
-
-(defn count-rows
-  [{:keys [buffer]}]
-  (count buffer))
-
-(defn row-id
-  [row-number]
-  (str "row-" row-number))
-
 (defn clamp-to-chars
   {:test (fn []
            (is (= (clamp-to-chars {:char-width 1} "hej" 1.6) 2))
@@ -203,114 +190,6 @@
   "Clamp x-position of cursor position between chars"
   [state {:keys [x y] :as mouse}]
   (assoc mouse :x (clamp-to-chars state (y->row state y) x)))
-
-(defn get-active-row
-  [{:keys [cursor] :as state}]
-  (get-row state (y->row-index state (:y cursor))))
-
-(defn inc-cursor-x
-  "Increase cursor position x with one char"
-  [{:keys [char-width] :as state}]
-  (update-in state [:cursor :x] #(min (+ char-width %))))
-
-(defn dec-cursor-x
-  "Decrease cursor position x with one char"
-  [{:keys [cursor char-width] :as state}]
-  (let [row (y->row state (:y cursor))]
-    (update-in state [:cursor :x] #(max 0 (->> (- % char-width)
-                                               (clamp-to-chars state row))))))
-
-(defn set-cursor-end-of-row
-  [state y]
-  {:pre [(>= y 0)]}
-  (let [row (y->row state y)]
-    (clamp-to-chars state row (count row))))
-
-(defn set-cursor
-  [state x y]
-  (update-in state [:cursor] assoc :x x :y y))
-
-(defn set-cursor-start
-  [{:keys [cursor] :as state}]
-  (set-cursor state 0 (:y cursor)))
-
-(defn x->char-pos
-  [{:keys [char-width]} x]
-  (/ x char-width))
-
-(defn dec-cursor-y
-  [{:keys [styles] :as state}]
-  (update-in state [:cursor :y] #(- % (:line-height styles))))
-
-(defn inc-cursor-y
-  [{:keys [styles] :as state}]
-  (update-in state [:cursor :y] #(+ % (:line-height styles))))
-
-(defn str-insert
-  {:test (fn [] (is (= (str-insert "hej" "B" 1) "hBej")))}
-  [s c i]
-  (str (subs s 0 i) c (subs s i)))
-
-(defn remove-char-at
-  {:test (fn [] (is (= (remove-char-at "hej" 0) "ej")))}
-  [s i]
-  (str (subs s 0 i) (subs s (+ 1 i))))
-
-(defn remove-last-char
-  {:test (fn [] (is (= (remove-last-char "hej") "he")))}
-  [s]
-  (remove-char-at s (dec (count s))))
-
-(defn row-overflow?
-  {:test (fn [] (is (= (row-overflow? {:char-width 11 :styles {:editor-width 100}} (s/join (repeat 9 "a")))
-                       true)))}
-  [{:keys [char-width styles]} row]
-  (-> (count row)
-      (* char-width)
-      (+ char-width)                                        ;; plus the char to be added
-      (> (:editor-width styles))))
-
-;; TODO check if this is correct and use it in remove-row, seeeeeems fishy.
-(defn drop-nth
-  [v i]
-  (vec (concat (subvec v 0 i) (subvec v (inc i)))))
-
-(defn remove-row
-  {:test (fn [] (is (= (remove-row {:buffer ["r1" "r2" "r3"]} 1)
-                       {:buffer ["r1" "r3"]})))}
-  [{:keys [buffer] :as state} row-number]
-  (assoc state :buffer (drop-nth buffer row-number)))
-
-(defn insert-row-at
-  {:test (fn [] (is (= (insert-row-at {:buffer ["r1" "r2"]} 1 "new-row")
-                       {:buffer ["r1" "new-row" "r2"]})))}
-  [{:keys [buffer] :as state} row-number new-row]
-  (assoc state :buffer (vec (concat (subvec buffer 0 row-number) [new-row] (subvec buffer row-number)))))
-
-(defn cursor-end-of-row?
-  [{:keys [char-width cursor] :as state}]
-  (< (- (editor-width state)
-        (- (:x cursor) char-width))
-     char-width))
-
-(defn cursor-first-of-row?
-  [{:keys [cursor]}]
-  (zero? (:x cursor)))
-
-(defn rest-of-row
-  "Get chars after x, INCLUDING x"
-  [state row x]
-  (subs row (x->char-pos state x)))
-
-(defn first-of-row
-  "Get chars up to x, EXCLUDING x"
-  [state row x]
-  (subs row 0 (x->char-pos state x)))
-
-(defn split-row-at
-  {:test (fn [] (is (= (split-row-at "hello everybody" 4) ["hell" "o everybody"])))}
-  [row i]
-  [(subs row 0 i) (subs row i)])
 
 (defn y->buffer-cord
   {:test (fn []
@@ -345,21 +224,138 @@
              (is (= (y->buffer-cord buffer 6) [3 0]))
              (is (= (y->buffer-cord buffer 7) [4 0]))))}
   [buffer row-num]
-  (reduce (fn [[i j] row-group]
+  (reduce (fn [[j i] row-group]
             (let [rg-len (if (empty? row-group)
                            1
                            (count row-group))]
               (if (> (+ i rg-len) row-num)
                 (reduced [j (- row-num i)])
-                [(+ i rg-len) (inc j)]))) [0 0] buffer))
+                [(inc j) (+ i rg-len)]))) [0 0] buffer))
+
+(defn inc-cursor-x
+  "Increase cursor position x with one char"
+  [{:keys [char-width cursor buffer] :as state}]
+  (let [[by bx] (->>
+                  (y->row-index state (:y cursor))
+                  (y->buffer-cord buffer))
+        row (get-in state [:buffer by bx])
+        max-width (* (count row) char-width)]
+    (update-in state [:cursor :x] (fn [x] (min max-width (+ char-width x))))))
+
+(defn dec-cursor-x
+  "Decrease cursor position x with one char"
+  [{:keys [cursor char-width] :as state}]
+  (let [row (y->row state (:y cursor))]
+    (update-in state [:cursor :x] #(max 0 (->> (- % char-width)
+                                               (clamp-to-chars state row))))))
+
+(defn set-cursor
+  [state x y]
+  (update-in state [:cursor] assoc :x x :y y))
+
+(defn set-cursor-start
+  [{:keys [cursor] :as state}]
+  (set-cursor state 0 (:y cursor)))
+
+(defn x->char-pos
+  [{:keys [char-width]} x]
+  (/ x char-width))
+
+(defn number-of-lines
+  [{:keys [buffer]}]
+  (-> (flatten buffer)
+      count))
+
+(defn row-above
+  "Get the row above, if on first row, return the first row"
+  [buffer by bx]
+  (if (zero? bx)
+    (last (get-in buffer [(max 0 (dec by))]))
+    (get-in buffer [by (dec bx)])))
+
+(defn row-below
+  "Get the row below, if on last row, return the last row.."
+  [buffer by bx]
+  (let [row-buffer (get buffer by)
+        row-buffer-len (count row-buffer)
+        n-buffer-rows (count buffer)]
+    (if (= bx (dec row-buffer-len))
+      (get-in buffer [(min (dec n-buffer-rows) (inc by)) 0])
+      (get-in buffer [by (inc bx)])
+      )))
+
+(defn dec-cursor-y
+  [{:keys [cursor buffer styles char-width] :as state}]
+  (let [[by bx] (->>
+                  (y->row-index state (:y cursor))
+                  (y->buffer-cord buffer))
+        ra (row-above buffer by bx)]
+    (->
+      (assoc-in state [:cursor :x] (clamp-to-chars state ra (:max-x cursor)))
+      (update-in [:cursor :y] (fn [y] (max 0 (- y (:line-height styles))))))))
+
+(defn inc-cursor-y
+  [{:keys [buffer cursor styles] :as state}]
+  (let [[by bx] (->>
+                  (y->row-index state (:y cursor))
+                  (y->buffer-cord buffer))
+        rb (row-below buffer by bx)]
+    (->
+      (assoc-in state [:cursor :x] (clamp-to-chars state rb (:max-x cursor)))
+      (update-in [:cursor :y] (fn [y] (max (number-of-lines state)
+                                           (+ y (:line-height styles))))))))
+
+(defn str-insert
+  {:test (fn [] (is (= (str-insert "hej" "B" 1) "hBej")))}
+  [s c i]
+  (str (subs s 0 i) c (subs s i)))
+
+(defn remove-char-at
+  {:test (fn [] (is (= (remove-char-at "hej" 0) "ej")))}
+  [s i]
+  (str (subs s 0 i) (subs s (+ 1 i))))
+
+(defn remove-last-char
+  {:test (fn [] (is (= (remove-last-char "hej") "he")))}
+  [s]
+  (remove-char-at s (dec (count s))))
+
+(defn drop-nth
+  [v i]
+  (vec (concat (subvec v 0 i) (subvec v (inc i)))))
+
+(defn insert-row-at
+  {:test (fn [] (is (= (insert-row-at {:buffer ["r1" "r2"]} 1 "new-row")
+                       {:buffer ["r1" "new-row" "r2"]})))}
+  [{:keys [buffer] :as state} row-number new-row]
+  (assoc state :buffer (vec (concat (subvec buffer 0 row-number) [new-row] (subvec buffer row-number)))))
+
+(defn cursor-end-of-row?
+  [{:keys [char-width cursor] :as state}]
+  (< (- (editor-width state)
+        (- (:x cursor) char-width))
+     char-width))
+
+(defn cursor-first-of-row?
+  [{:keys [cursor]}]
+  (zero? (:x cursor)))
+
+(defn rest-of-row
+  "Get chars after x, INCLUDING x"
+  [state row x]
+  (subs row (x->char-pos state x)))
+
+(defn first-of-row
+  "Get chars up to x, EXCLUDING x"
+  [state row x]
+  (subs row 0 (x->char-pos state x)))
 
 (defn partition-buffer-row
-  [buffer-row max-row-len]
-  (->> (mapv (fn [r]
-               (->> (partition-all max-row-len r)
-                    (mapv (partial s/join "")))) buffer-row)
-       flatten
-       (into [])))
+  [max-chars buffer-row]
+  (->> buffer-row
+       (s/join "")
+       (partition-all max-chars)
+       (mapv (partial s/join ""))))
 
 (defn process-char
   [{:keys [char-width cursor buffer] :as state} key]
@@ -370,105 +366,111 @@
         max-chars (/ (editor-width state) char-width)
         line-group (->>
                      (/ (:x cursor) char-width)
-                     (str-insert row key)
+                     (str-insert row key)                   ;; TODO this crashes sometimes??, row seems to be nil
                      (assoc (get-in state [:buffer by]) bx)
-                     (s/join "")
-                     (partition-all max-chars)
-                     (mapv (partial s/join "")))]
+                     (partition-buffer-row max-chars))]
     (-> (assoc-in state [:buffer by] line-group)
         (#(if (cursor-end-of-row? %)
-            (do
-              (-> (inc-cursor-y %)
-                  set-cursor-start))
+            (-> (inc-cursor-y %)
+                set-cursor-start)
             %))
         inc-cursor-x)))
-
-(defn empty-row?
-  [state row-number]
-  (empty? (get-row state row-number)))
 
 (defn process-backspace
   "Some cases:
   1) just delete a char anywhere but the firs on a row
   2) delete the first \n i.e merge two lines
   3) delete at index (0,0)
+  4) if the row is empty we should delete it.
 
-  1) is ez, 3) just an edge case
-  2) needs thinking...
-  in 2) we need to take the the first row in the current
-  row-group and merge that with the last row in the row-group above.
-  Special care needs to be taken when dealing with line 0,
-  but that can never happen.
-  also, if the row-group only contains one row, we nee to delete the whole row.!
-
-  appratanly 1) is not that trivial since we need to shift the whole row-group back 1 step :D
-
-  We also forgot one important case.
-  4) if the row is empty, delete the whole row
-
-  super grow flaw we had..
-  we cant just check if cursor is first in row, we must check if the current row is first in the
-  row-group....
-
-  TODO soemthing is fishy when removing rows
+  for all of these, we need to shift the full buffer row to account for page width
   "
   [{:keys [cursor buffer char-width styles] :as state}]
   (let [row-index (y->row-index state (:y cursor))
         [by bx] (y->buffer-cord buffer row-index)
         row (get-in buffer [by bx])
-        max-chars (/ (editor-width state) char-width)]
+        max-chars (/ (editor-width state) char-width)
+        buffer-row (get-in state [:buffer by])]
     (cond
-
+      ;; we are inside the same row-group
       (and (cursor-first-of-row? state) (> bx 0))
-      (let [prev-row (get-in state [:buffer by (dec bx)])
-            del-row (remove-last-char prev-row)
-            row-group (->> (assoc (get-in state [:buffer by]) (dec bx) (str del-row row))
+      (let [del-row (-> (get-in state [:buffer by (dec bx)])
+                        remove-last-char)
+            row-group (->> (str del-row row)
+                           (assoc buffer-row (dec bx))
                            (#(drop-nth % bx))
-                           (s/join "")
-                           (partition-all max-chars)
-                           (mapv (partial s/join "")))]
-        (->
-          (assoc-in state [:buffer by] row-group)
-          (set-cursor (* char-width (count del-row)) (- (:y cursor) (:line-height styles)))))
+                           (partition-buffer-row max-chars))]
+        (-> (assoc-in state [:buffer by] row-group)
+            (set-cursor (* char-width (count del-row)) (- (:y cursor) (:line-height styles)))))
 
       (and (cursor-first-of-row? state) (zero? bx) (> row-index 0))
       (let [row-group-above (get-in state [:buffer (dec by)])
             row-above (last row-group-above)
-            new-row-group-above (->> (conj (into [] (butlast row-group-above)) (str row-above row))
-                                     (s/join "")
-                                     (partition-all max-chars)
-                                     (mapv (partial s/join "")))]
+            new-row-group-above (->>
+                                  (concat (into [] (butlast row-group-above))
+                                          [(str row-above row)]
+                                          (into [] (rest buffer-row)))
+                                  (into [])
+                                  (partition-buffer-row max-chars))]
         (->
           (assoc-in state [:buffer (dec by)] new-row-group-above)
-          (assoc-in [:buffer by] (into [] (butlast (get-in buffer [by]))))
-          (#(if (empty? (get-in % [:buffer by]))
-              (remove-row % row-index)
-              %))
+          (as-> state (assoc-in state [:buffer] (drop-nth (:buffer state) by))) ;; I think these are a bit awkward, changing state at the same time needed stuff from the changed state
           (set-cursor (* char-width (count row-above)) (- (:y cursor) (:line-height styles)))))
-
       :else
-      (let [row-group (get-in state [:buffer by])]
-        (->
-          (assoc-in state [:buffer by] (->>
-                                         (assoc row-group bx (remove-char-at row (/
-                                                                                   (- (:x cursor) char-width)
-                                                                                   char-width)))
-                                         (s/join "")
-                                         (partition-all max-chars)
-                                         (mapv (partial s/join ""))))
-          dec-cursor-x)))))
+      (let [removed-row (remove-char-at row (/ (- (:x cursor) char-width) char-width))
+            row-group (->> (if (empty? removed-row) " " removed-row) ;; " " so row doesn't collapse when deleting the last char
+                           (assoc buffer-row bx)
+                           (partition-buffer-row max-chars))]
+        (-> (assoc-in state [:buffer by] row-group)
+            dec-cursor-x)))))
 
+(defn process-enter
+  "
+  for all of these, we are splitting a row-buffer cus with a \n in the middle of one
+  the row is no longer overflowing
+
+  Some cases:
+      1) cursor at last index in a row buffer, i.e hello|, | = cursor
+      2) cursor is somewhere at a row except last, like above
+
+   Maybe we could treat these two the same,
+   we must just take all the things in the row-buffer that is after the cursor
+   and put them in a new line, ez,
+   remember, the position of enter char must include that char since it visually it looks
+   like the cursor is just behind that char
+  "
+  [{:keys [cursor buffer char-width] :as state}]
+  (let [row-index (y->row-index state (:y cursor))
+        [by bx] (y->buffer-cord buffer row-index)
+        row (get-in state [:buffer by bx])
+        buffer-row (get-in state [:buffer by])
+        x-offset (/ (:x cursor) char-width)
+        [first second] (split-str row x-offset)
+        rest-buffer-row (subvec buffer-row (inc bx))]
+    (->
+      (assoc-in state [:buffer by] (subvec buffer-row 0 (inc bx)))
+      (assoc-in [:buffer by bx] first)
+      (insert-row-at (inc by) (into [] (cons second rest-buffer-row)))
+      inc-cursor-y
+      set-cursor-start)))
 
 (defn process-key-down
   [state {:keys [key]}]
   (condp re-matches key
-    #"Enter" (update state :keys-down conj (keyword key))
+    #"Enter" (-> (update state :keys-down conj (keyword key))
+                 process-enter)
     #"Shift" nil
     #"Meta" nil
-    #"ArrowRight" nil
-    #"ArrowLeft" nil
-    #"ArrowUp" nil
-    #"ArrowDown" nil
+    #"ArrowRight" (-> (update state :keys-down conj (keyword key))
+                      inc-cursor-x
+                      (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x))))
+    #"ArrowLeft" (-> (update state :keys-down conj (keyword key))
+                     dec-cursor-x
+                     (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x))))
+    #"ArrowUp" (-> (update state :keys-down conj (keyword key))
+                   dec-cursor-y)
+    #"ArrowDown" (-> (update state :keys-down conj (keyword key))
+                     inc-cursor-y)
     #"Backspace" (->
                    (update state :keys-down conj (keyword key))
                    process-backspace)
@@ -524,7 +526,8 @@
       (-> (assoc-in state [:mouse :start] mouse)
           (assoc-in [:mouse :is-down] true)
           (assoc :cursor (clamp-cursor state mouse))
-          (assoc :selections [])))))
+          (assoc :selections [])
+          (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x)))))))
 
 (defn process-mouse-up
   [state {:keys [js-evt]}]
