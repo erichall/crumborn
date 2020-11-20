@@ -9,14 +9,23 @@
 
 (enable-console-print!)
 ;; TODO
-;; []   handle when rows expands to multiple rows, can no longer use 21px as height... :~>
+;; [X]   handle when rows expands to multiple rows, can no longer use 21px as height... :~>
 ;; [X]  handle selections for empty rows
 ;; [X]  remove fetching row width and chars directly from the dom cus it messes up when removing chars..
 ;;        we should fetch it from the buffer instead and keep a fixed char-width as a style maybe??
-;; []   Remove active-line and just get-it from cursor y pos?
-;; []   it seems to be impossible to rely on pre-line word wrapping since you are not able
+;; [X]   Remove active-line and just get-it from cursor y pos?
+;; [X]   it seems to be impossible to rely on pre-line word wrapping since you are not able
 ;;      to place the cursor on the invisible \n char that is not shown when wrapping..
 ;;      I guess we have to roll back to manually dealing with rows, I guess we are better prepared this time
+;; [] fix the toolbar
+;; [] fix the gutter with row numbers
+;; [] fix copy paste
+;; [x] hide the active row if selection is present
+;; [x] disable caret flashing while typing?
+;; [x] fix when right clicking on selection so it still active
+;; [] add all different keys
+;; [] refactor select rows
+
 
 (defn get-lines
   [buffer]
@@ -84,6 +93,14 @@
 (defn editor-width
   [{:keys [styles]}]
   (:editor-width styles))
+
+(defn line-height
+  [{:keys [styles]}]
+  (:line-height styles))
+
+(defn font-size
+  [{:keys [styles]}]
+  (:font-size styles))
 
 (defn- listen
   [element type]
@@ -179,11 +196,10 @@
    :post [(double? %) (interop/not-nan? %)]}
   (let [mid-range (/ char-width 2)
         value-range (mod value char-width)
-        row-length (count row)
         clamped-val (if (<= value-range mid-range)
                       (- value value-range)
                       (+ char-width (- value value-range)))]
-    (max 0 (min (* char-width row-length) clamped-val))))
+    (max 0 (min (* char-width (count row)) clamped-val))))
 
 ;; TODO this is frekking missleadidng fn.... and i guess its wrong??
 (defn clamp-cursor
@@ -364,11 +380,10 @@
                   (y->buffer-cord buffer))
         row (get-in buffer [by bx])
         max-chars (/ (editor-width state) char-width)
-        line-group (->>
-                     (/ (:x cursor) char-width)
-                     (str-insert row key)                   ;; TODO this crashes sometimes??, row seems to be nil
-                     (assoc (get-in state [:buffer by]) bx)
-                     (partition-buffer-row max-chars))]
+        line-group (->> (/ (:x cursor) char-width)
+                        (str-insert row key)
+                        (assoc (get-in state [:buffer by]) bx)
+                        (partition-buffer-row max-chars))]
     (-> (assoc-in state [:buffer by] line-group)
         (#(if (cursor-end-of-row? %)
             (-> (inc-cursor-y %)
@@ -461,6 +476,8 @@
                  process-enter)
     #"Shift" nil
     #"Meta" nil
+    #"Alt" nil
+    #"Tab" nil                                              ;; TODO
     #"ArrowRight" (-> (update state :keys-down conj (keyword key))
                       inc-cursor-x
                       (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x))))
@@ -475,8 +492,7 @@
                    (update state :keys-down conj (keyword key))
                    process-backspace)
     (-> (update state :keys-down conj (keyword key))
-        (process-char key))
-    ))
+        (process-char key))))
 
 (defn process-key-up
   [state {:keys [key]}]
@@ -514,15 +530,14 @@
       int))
 
 (defn in-editor?
-  [{:keys [x y]}]
-  ;; TODO dont deref inside pure fn
-  (and (>= x 0) (<= x (get-in @state-atom [:styles :editor-width]))
-       (>= y 0) (<= y (get-in @state-atom [:styles :editor-height]))))
+  [{:keys [x y]} {:keys [editor-width editor-height]}]
+  (and (>= x 0) (<= x editor-width)
+       (>= y 0) (<= y editor-height)))
 
 (defn process-mouse-down
-  [state {:keys [js-evt]}]
+  [{:keys [styles] :as state} {:keys [js-evt]}]
   (let [mouse (->> (get-dom-el "editor-area") (get-relative-mouse-cords js-evt))]
-    (when (in-editor? mouse)
+    (when (in-editor? mouse styles)
       (-> (assoc-in state [:mouse :start] mouse)
           (assoc-in [:mouse :is-down] true)
           (assoc :cursor (clamp-cursor state mouse))
@@ -563,12 +578,16 @@
   "position of a fully selected row"
   [{:keys [char-width] :as state} line-height row-num]
   (let [width (* char-width (count (get-row state row-num)))]
-    {:width (if (zero? width) char-width width)             ;; TODO char-width..??
+    {:width (if (zero? width) char-width width)
      :top   (selection-top-dist row-num line-height)
      :left  0}))
 
 ;; TODO this is a mess now, must refactor
 (defn select-rows-between
+  "Wouldn't it be nice if this just returned two 3d coordinates which means:
+  from: [y,x,z] = [buffer-row, buffer-index, offset-inside-row]
+  to:   [y,x,z] = [buffer-row, buffer-index, offset-inside-row]
+  "
   [{:keys [char-width] :as state} a b line-height]
   (let [fixed-row-index (y->row-index state (:y a))
         moving-row-index (y->row-index state (:y b))
@@ -597,43 +616,140 @@
           [(selection-x->end state fixed-row fixed-row-index fixed-x fixed-row-width line-height)
            (selection-zero->x state moving-row moving-row-index moving-x line-height)])))))
 
+(defn dist-to-origin
+  [{:keys [x y]}]
+  (Math/sqrt (+ (Math/pow x 2) (Math/pow y 2))))
+
+(defn rows-between
+  "Returns a list with buffer coordinates for all rows between [a,b] including a and b"
+  [{:keys [buffer] :as state} bya bxa byb bxb]
+  (if (= bya byb)                                           ;; same row
+    [[bya bxa]]
+    (let [between (subvec buffer bya (inc byb))
+          first (subvec (first between) bxa)
+          last (subvec (last between) 0 (inc bxb))
+          map-buffer (fn [v row-num] (->> (map-indexed (fn [z _] [row-num z]) v)
+                                          (into [])))]
+      (loop [row-num bya
+             cords []]
+        (if (= row-num byb)
+          (->> (map-buffer last row-num)
+               (concat cords)
+               (into []))
+          (recur (inc row-num)
+                 (concat cords (map-buffer (if (= row-num bya)
+                                             first
+                                             (get buffer row-num)) row-num))))))))
+
+(defn select-rows-between-v2
+  [{:keys [buffer char-width] :as state} a b]
+  (let [[bya bxa] (->>
+                    (y->row-index state (:y a))
+                    (y->buffer-cord buffer))
+        [byb bxb] (->>
+                    (y->row-index state (:y b))
+                    (y->buffer-cord buffer))
+        row-a (get-in state [:buffer bya bxa])
+        row-b (get-in state [:buffer byb bxb])
+        da (dist-to-origin a)
+        db (dist-to-origin b)
+        a-z-offset (/ (clamp-to-chars state row-a (:x a)) char-width)
+        b-z-offset (/ (clamp-to-chars state row-b (:x b)) char-width)]
+    (if (< da db)
+      (rows-between state bya bxa byb bxb)
+      ;{:from [bya bxa a-z-offset]
+      ; :to   [byb bxb b-z-offset]}
+      (rows-between state byb bxb bya bxa)
+      ;{:from [byb bxb b-z-offset]
+      ; :to   [bya bxa a-z-offset]}
+      )
+
+
+    state)
+  )
+
 (defn process-mouse-move
-  [state {:keys [js-evt]}]
+  [{:keys [styles] :as state} {:keys [js-evt]}]
   (when (get-in state [:mouse :is-down])
     (let [mouse (->> (get-dom-el "editor-area") (get-relative-mouse-cords js-evt))]
-      (when (in-editor? mouse)
+      (when (in-editor? mouse styles)
         (-> (assoc-in state [:mouse :end] mouse)
             (assoc :cursor (clamp-cursor state mouse))
+            (as-> state (select-rows-between-v2 state (get-in state [:mouse :start]) (get state :cursor)))
             (as-> state (assoc state :selections (select-rows-between
                                                    state
                                                    (get-in state [:mouse :start])
                                                    (get state :cursor)
                                                    (get-in state [:styles :line-height])))))))))
 
+(defn handle-copy
+  [state {:keys [js-evt]}]
+  state)
+
+(defn handle-paste
+  [state {:keys [js-evt]}]
+  (js/console.log js-evt)
+  (let [clipboard-data (aget js-evt "clipboardData")
+        txt (js-invoke clipboard-data "getData" "text")]
+    state))
+
 (defn handle-mouse-event
   [state {:keys [mouse-type] :as data}]
+  ;(js/console.log (:js-evt data))
   (condp = mouse-type
     :mousemove (process-mouse-move state data)
     :mousedown (process-mouse-down state data)
+    :mouse-right-down nil                                   ;; TODO
     :mouseup (process-mouse-up state data)
     (js/console.warn "Unable to process mouse event: " type)))
+
+(defn mutate!
+  [state-atom mutate-fn mutate-args]
+  (swap! state-atom (fn [state] (if-let [new-state (mutate-fn state mutate-args)]
+                                  new-state
+                                  state))))
 
 (defn handle-event!
   [name data]
   {:pre [(keyword? name)]}
   (condp = name
-    :key-pressed (swap! state-atom (fn [state] (if-let [new-state (process-key state data)]
-                                                 new-state
-                                                 state)))
-    :mouse-event (swap! state-atom (fn [state] (if-let [new-state (handle-mouse-event state data)]
-                                                 new-state
-                                                 state)))
+    :key-pressed (mutate! state-atom process-key data)
+    :mouse-event (mutate! state-atom handle-mouse-event data)
+
+    :copy (handle-copy @state-atom data)
+    :paste (mutate! state-atom handle-paste data)
+
     :measure-char (swap! state-atom assoc
                          :char-width (:char-width data)
                          :buffer (txt->buffer (:buffer @state-atom)
                                               (:char-width data)
                                               (editor-width @state-atom)))
     (js/console.warn "Unable to handle event" name data)))
+
+(defn active-row
+  [{:keys [state]}]
+  (let [editor-width (editor-width state)
+        line-height (line-height state)
+        font-size (font-size state)
+        row-index (y->row-index state (get-in state [:cursor :y]))]
+    (when (empty? (:selections state))
+      [:div {:id         "active-row"
+             :tab-index  -1
+             :draggable  false
+             :userselect "none"
+             :style      {:position            "absolute"
+                          :background          "#ecece7"
+                          :width               (str editor-width "px")
+                          :outline             "none"
+                          :-webkit-user-select "none"
+                          :cursor              "text"
+                          :z-index             -2
+                          :top                 (str (* line-height row-index) "px")
+                          :height              (str line-height "px")
+                          :line-height         (str line-height "px")
+                          :word-break          "break-all"
+                          :font-family         "monospace"
+                          :font-size           (str font-size "px")}}])))
 
 (defn editor
   []
@@ -647,6 +763,8 @@
                               (let [chans (async/merge
                                             [(listen (interop/get-element-by-id "editor-input") "keydown")
                                              (listen (interop/get-element-by-id "editor-input") "keyup")
+                                             (listen (interop/get-element-by-id "editor-input") "copy")
+                                             (listen (interop/get-element-by-id "editor-input") "paste")
                                              (listen interop/document "mousedown")
                                              (listen interop/document "mouseup")
                                              (listen interop/document "mousemove")])]
@@ -654,11 +772,20 @@
                                             (let [evt (async/<! chans)
                                                   type (keyword (.-type evt))]
                                               (when (contains? #{:mousedown :mouseup :mousemove} type)
-                                                (trigger-event :mouse-event {:mouse-type type :js-evt evt}))
+                                                (if (= 3 (aget evt "which"))
+                                                  (trigger-event :mouse-event {:mouse-type :mouse-right-down :js-evt evt})
+                                                  (trigger-event :mouse-event {:mouse-type type :js-evt evt})))
 
                                               (when (contains? #{:keydown :keyup} type)
                                                 (trigger-event :key-pressed {:key-type type
                                                                              :key      (.-key evt)}))
+
+                                              (when (= type :copy)
+                                                (trigger-event :copy {:js-evt evt}))
+
+                                              (when (= type :paste)
+                                                (trigger-event :paste {:js-evt evt}))
+
                                               (recur)
                                               )))))
        :reagent-render      (fn []
@@ -697,41 +824,16 @@
                                                      :background-color    "transparent"
                                                      :font                "Monaco"
                                                      :font-family         "monospace"}}
-                                  [:div {:id         "active-row"
-                                         :tab-index  -1
-                                         :draggable  false
-                                         :userselect "none"
-                                         :style      {:position            "absolute"
-                                                      :background          "#ecece7"
-                                                      :width               (str (get-in @state-atom [:styles :editor-width]) "px")
-                                                      :outline             "none"
-                                                      :-webkit-user-select "none"
-                                                      :cursor              "text"
-                                                      :z-index             -2
-                                                      :top                 (str (* (get-in @state-atom [:styles :line-height]) (y->row-index @state-atom (get-in @state-atom [:cursor :y]))) "px") ;; TODO
-                                                      :height              (str (get-in @state-atom [:styles :line-height]) "px")
-                                                      :line-height         (str (get-in @state-atom [:styles :line-height]) "px")
-                                                      :word-break          "break-all"
-                                                      :font-family         "monospace"
-                                                      :font-size           (str (get-in @state-atom [:styles :font-size]) "px")}}]
+                                  [active-row {:state @state-atom}]
                                   (when char-width
-                                    (doall (map-indexed (fn [i row-group] [:div {:key    (str "row-group-" i)
-                                                                                 :id     (str "row-group-" i)
-                                                                                 :cursor "text"}
-                                                                           [:div {:style {:cursor      "text"
-                                                                                          :font-family "monospace"
-                                                                                          :white-space "nowrap"
-                                                                                          :display     "inline-block"
-                                                                                          :width       "100%"
-
-                                                                                          }}
-                                                                            (doall (map-indexed (fn [j row]
-                                                                                                  [:div {:id    (str "row-" j "-" i)
-                                                                                                         :key   (str "row-" j "-" i)
-                                                                                                         :style {:white-space "pre"}} row]
-                                                                                                  ) row-group))
-                                                                            ]]) buffer)))
-                                  ]
+                                    (doall (map-indexed (fn [i row-group] [:div {:key   (str "row-" i)
+                                                                                 :id    (str "row-" i)
+                                                                                 :style {:cursor      "text"
+                                                                                         :font-family "monospace"
+                                                                                         :white-space "pre"
+                                                                                         :display     "inline-block"
+                                                                                         :width       "100%"}}
+                                                                           row-group]) (flatten buffer))))]
                                  [:div {:id         "selections"
                                         :draggable  false
                                         :tab-index  -1
@@ -755,13 +857,11 @@
                                                                        :width      (str width "px")
                                                                        :top        (str top "px")
                                                                        :left       (str left "px")}}]
-                                                        ) selections))
-
-                                  ]
+                                                        ) selections))]
                                  [:div {:id    "caret"
                                         :style {
                                                 :transform (str "translate(" (get-in @state-atom [:cursor :x]) "px," (* (get-in @state-atom [:styles :line-height]) (y->row-index @state-atom (get-in @state-atom [:cursor :y]))) "px)") ;; TODO
-                                                :animation "typing 3.5s steps(40, end),  blink-caret .75s step-end infinite"
+                                                :animation (when (empty? (get @state-atom :keys-down)) "typing 3.5s steps(40, end), blink-caret .75s step-end infinite")
                                                 :opacity   "0.3"
                                                 :display   "block"
                                                 :border    "1px solid black"
