@@ -623,8 +623,8 @@
 (defn rows-between
   "Returns a list with buffer coordinates for all rows between [a,b] including a and b"
   [{:keys [buffer] :as state} bya bxa byb bxb]
-  (if (= bya byb)                                           ;; same row
-    [[bya bxa]]
+  (if (and (= bya byb) (= bxa bxb))                         ;; same row
+    [[bya bxa] [byb bxb]]
     (let [between (subvec buffer bya (inc byb))
           first (subvec (first between) bxa)
           last (subvec (last between) 0 (inc bxb))
@@ -654,16 +654,28 @@
         da (dist-to-origin a)
         db (dist-to-origin b)
         a-z-offset (/ (clamp-to-chars state row-a (:x a)) char-width)
-        b-z-offset (/ (clamp-to-chars state row-b (:x b)) char-width)]
-    (if (< da db)
-      (rows-between state bya bxa byb bxb)
-      ;{:from [bya bxa a-z-offset]
-      ; :to   [byb bxb b-z-offset]}
-      (rows-between state byb bxb bya bxa)
-      ;{:from [byb bxb b-z-offset]
-      ; :to   [bya bxa a-z-offset]}
-      )
-
+        b-z-offset (/ (clamp-to-chars state row-b (:x b)) char-width)
+        rb (if (< da db)
+             (rows-between state bya bxa byb bxb)
+             (rows-between state byb bxb bya bxa))
+        between (mapv (fn [row-cord]
+                        (conj row-cord 0 (->> (cons :buffer row-cord)
+                                              (get-in state)
+                                              count))) rb)
+        same-row? (and (= bya byb) (= bxa bxb))
+        ]
+    (println (-> (assoc between 0 (if (< da db)
+                                    [bya bxa a-z-offset (if same-row?
+                                                          bxb
+                                                          (count row-a))]
+                                    [byb bxb b-z-offset (if same-row?
+                                                          bxa
+                                                          (count row-b))]))
+                 (assoc (dec (count between)) (if (< da db)
+                                                [byb bxb (if same-row?
+                                                           bxa
+                                                           b-z-offset)]
+                                                [bya bxa 0 a-z-offset]))))
 
     state)
   )
@@ -688,9 +700,9 @@
 
 (defn handle-paste
   [state {:keys [js-evt]}]
-  (js/console.log js-evt)
   (let [clipboard-data (aget js-evt "clipboardData")
         txt (js-invoke clipboard-data "getData" "text")]
+    (println txt)
     state))
 
 (defn handle-mouse-event
@@ -761,10 +773,11 @@
                                                                               interop/get-bounding-client-rect
                                                                               :width)}))
                               (let [chans (async/merge
-                                            [(listen (interop/get-element-by-id "editor-input") "keydown")
+                                            [
+                                             (listen (interop/get-element-by-id "editor-input") "keydown")
                                              (listen (interop/get-element-by-id "editor-input") "keyup")
                                              (listen (interop/get-element-by-id "editor-input") "copy")
-                                             (listen (interop/get-element-by-id "editor-input") "paste")
+                                             (listen interop/document "paste")
                                              (listen interop/document "mousedown")
                                              (listen interop/document "mouseup")
                                              (listen interop/document "mousemove")])]
