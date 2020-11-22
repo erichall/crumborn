@@ -19,12 +19,15 @@
 ;;      I guess we have to roll back to manually dealing with rows, I guess we are better prepared this time
 ;; [] fix the toolbar
 ;; [] fix the gutter with row numbers
-;; [] fix copy paste
-;; [x] hide the active row if selection is present
-;; [x] disable caret flashing while typing?
-;; [x] fix when right clicking on selection so it still active
+;; [] fix copy
+;; [] fix cut
+;; [X] fix paste
+;; [X] fix so when you copy you don't type in c or v
+;; [X] hide the active row if selection is present
+;; [X] disable caret flashing while typing?
+;; [X] fix when right clicking on selection so it still active
 ;; [] add all different keys
-;; [] refactor select rows
+;; [X] refactor select rows
 
 
 (defn get-lines
@@ -247,6 +250,16 @@
               (if (> (+ i rg-len) row-num)
                 (reduced [j (- row-num i)])
                 [(inc j) (+ i rg-len)]))) [0 0] buffer))
+(defn set-last
+  [col value]
+  (assoc col (dec (count col)) value))
+
+(defn buffer-cord->y
+  [buffer by bx]
+  (-> (subvec buffer 0 (inc by))
+      (set-last (subvec (get buffer by) 0 (inc bx)))
+      flatten
+      count))
 
 (defn inc-cursor-x
   "Increase cursor position x with one char"
@@ -373,6 +386,23 @@
        (partition-all max-chars)
        (mapv (partial s/join ""))))
 
+(defn insert-text-in-buffer
+  [{:keys [cursor buffer char-width] :as state} txt]
+  (let [[by bx] (->>
+                  (y->row-index state (:y cursor))
+                  (y->buffer-cord buffer))
+        [first & rest] (s/split-lines txt)
+        row (get-in buffer [by bx])
+        buffer-to-insert (txt->buffer (s/join "" rest) char-width (editor-width state))
+        max-chars (/ (editor-width state) char-width)
+        line-group (->> (/ (:x cursor) char-width)
+                        (str-insert row first)
+                        (assoc (get-in state [:buffer by]) bx)
+                        (partition-buffer-row max-chars))]
+
+    )
+  )
+
 (defn process-char
   [{:keys [char-width cursor buffer] :as state} key]
   (let [[by bx] (->>
@@ -469,30 +499,43 @@
       inc-cursor-y
       set-cursor-start)))
 
+(defn key-down?
+  [{:keys [keys-down]} key]
+  (contains? keys-down key))
+
 (defn process-key-down
   [state {:keys [key]}]
   (condp re-matches key
     #"Enter" (-> (update state :keys-down conj (keyword key))
+                 (assoc :selections [])
                  process-enter)
     #"Shift" nil
-    #"Meta" nil
+    #"Meta" (-> (update state :keys-down conj (keyword key)))
     #"Alt" nil
     #"Tab" nil                                              ;; TODO
     #"ArrowRight" (-> (update state :keys-down conj (keyword key))
+                      (assoc :selections [])
                       inc-cursor-x
                       (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x))))
     #"ArrowLeft" (-> (update state :keys-down conj (keyword key))
+                     (assoc :selections [])
                      dec-cursor-x
                      (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x))))
     #"ArrowUp" (-> (update state :keys-down conj (keyword key))
+                   (assoc :selections [])
                    dec-cursor-y)
     #"ArrowDown" (-> (update state :keys-down conj (keyword key))
+                     (assoc :selections [])
                      inc-cursor-y)
-    #"Backspace" (->
+    #"Backspace" (->                                        ;; TODO handle selections here also...
                    (update state :keys-down conj (keyword key))
+                   (assoc :selections [])
                    process-backspace)
-    (-> (update state :keys-down conj (keyword key))
-        (process-char key))))
+    (let [state (-> (update state :keys-down conj (keyword key)))]
+      (if-not (or (and (key-down? state :Meta) (= key "c"))
+                  (and (key-down? state :Meta) (= key "v")))
+        (process-char (assoc state :selections []) key)
+        state))))
 
 (defn process-key-up
   [state {:keys [key]}]
@@ -550,81 +593,29 @@
              :end (->> (get-dom-el "editor-area") (get-relative-mouse-cords js-evt))
              :is-down false))
 
-(defn ge-sub
-  [a b]
-  (if (> a b)
-    (- a b)
-    (- b a)))
-
-(defn selection-top-dist
-  [row-num line-height]
-  (* line-height row-num))
-
-(defn selection-x->end
-  "position of a row from x to the end of that row"
-  [state row row-num x full-width line-height]
-  {:width (clamp-to-chars state row (- full-width x))
-   :top   (selection-top-dist row-num line-height)
-   :left  (clamp-to-chars state row x)})
-
-(defn selection-zero->x
-  "position of a row from start of the row to coordinate x"
-  [state row row-num x line-height]
-  {:width (clamp-to-chars state row x)
-   :top   (selection-top-dist row-num line-height)
-   :left  0})
-
-(defn selection-zero->end
-  "position of a fully selected row"
-  [{:keys [char-width] :as state} line-height row-num]
-  (let [width (* char-width (count (get-row state row-num)))]
-    {:width (if (zero? width) char-width width)
-     :top   (selection-top-dist row-num line-height)
-     :left  0}))
-
-;; TODO this is a mess now, must refactor
-(defn select-rows-between
-  "Wouldn't it be nice if this just returned two 3d coordinates which means:
-  from: [y,x,z] = [buffer-row, buffer-index, offset-inside-row]
-  to:   [y,x,z] = [buffer-row, buffer-index, offset-inside-row]
-  "
-  [{:keys [char-width] :as state} a b line-height]
-  (let [fixed-row-index (y->row-index state (:y a))
-        moving-row-index (y->row-index state (:y b))
-        fixed-row (y->row state (:y a))
-        moving-row (y->row state (:y b))
-        fixed-row-width (* (count fixed-row) char-width)
-        moving-row-width (* (count moving-row) char-width)
-        fixed-x (min (:x a) fixed-row-width)
-        moving-x (min (:x b) moving-row-width)]
-    (if (= fixed-row-index moving-row-index)                ;; same row
-      (let [row (y->row state (:y a))]
-        [{:width (clamp-to-chars state row (min (Math/abs (- fixed-x moving-x)) fixed-row-width))
-          :top   (* fixed-row-index line-height)
-          :left  (clamp-to-chars state row (min fixed-x moving-x))}])
-      (concat                                               ;; either drag up or down for different rows
-        (->>
-          (ge-sub fixed-row-index moving-row-index)         ;; n-rows between start and end selection row ;; remove 1 cus of separate handling
-          dec
-          (max 0)                                           ;; can't be < 0, no selections in this case
-          range                                             ;; n-rows to be selected
-          (map #(+ % 1 (min fixed-row-index moving-row-index))) ;; apply correct row-numbers for fully selected rows
-          (map (fn [row-num] (selection-zero->end state line-height row-num)))) ;; map full selection
-        (if (> fixed-row-index moving-row-index)
-          [(selection-x->end state moving-row moving-row-index moving-x moving-row-width line-height)
-           (selection-zero->x state fixed-row fixed-row-index fixed-x line-height)]
-          [(selection-x->end state fixed-row fixed-row-index fixed-x fixed-row-width line-height)
-           (selection-zero->x state moving-row moving-row-index moving-x line-height)])))))
 
 (defn dist-to-origin
   [{:keys [x y]}]
   (Math/sqrt (+ (Math/pow x 2) (Math/pow y 2))))
 
+(defn top-most
+  [a b line-height]
+  (let [floor-ay (Math/floor (/ (:y a) line-height))
+        floor-by (Math/floor (/ (:y b) line-height))]
+    (cond
+      (< floor-ay floor-by) a
+      (> floor-ay floor-by) b
+      (and (= floor-ay floor-by) (< (:x a) (:x b))) a
+      (and (= floor-ay floor-by) (>= (:x a) (:x b))) b
+      ;; hmmmm maybe this can happen??
+      :else
+      a)))
+
 (defn rows-between
   "Returns a list with buffer coordinates for all rows between [a,b] including a and b"
   [{:keys [buffer] :as state} bya bxa byb bxb]
   (if (and (= bya byb) (= bxa bxb))                         ;; same row
-    [[bya bxa] [byb bxb]]
+    [[bya bxa]]
     (let [between (subvec buffer bya (inc byb))
           first (subvec (first between) bxa)
           last (subvec (last between) 0 (inc bxb))
@@ -641,7 +632,9 @@
                                              first
                                              (get buffer row-num)) row-num))))))))
 
-(defn select-rows-between-v2
+(defn select-rows-between
+  "Get a list of tuples [buffer-row-index, row-index, row-start-index, row-end-index]
+  for the selected are between [a,b]"
   [{:keys [buffer char-width] :as state} a b]
   (let [[bya bxa] (->>
                     (y->row-index state (:y a))
@@ -651,34 +644,39 @@
                     (y->buffer-cord buffer))
         row-a (get-in state [:buffer bya bxa])
         row-b (get-in state [:buffer byb bxb])
-        da (dist-to-origin a)
-        db (dist-to-origin b)
         a-z-offset (/ (clamp-to-chars state row-a (:x a)) char-width)
         b-z-offset (/ (clamp-to-chars state row-b (:x b)) char-width)
-        rb (if (< da db)
+        start-point (top-most a b (line-height state))
+        rb (if (= a start-point)
              (rows-between state bya bxa byb bxb)
              (rows-between state byb bxb bya bxa))
         between (mapv (fn [row-cord]
                         (conj row-cord 0 (->> (cons :buffer row-cord)
                                               (get-in state)
                                               count))) rb)
-        same-row? (and (= bya byb) (= bxa bxb))
-        ]
-    (println (-> (assoc between 0 (if (< da db)
-                                    [bya bxa a-z-offset (if same-row?
-                                                          bxb
-                                                          (count row-a))]
-                                    [byb bxb b-z-offset (if same-row?
-                                                          bxa
-                                                          (count row-b))]))
-                 (assoc (dec (count between)) (if (< da db)
-                                                [byb bxb (if same-row?
-                                                           bxa
-                                                           b-z-offset)]
-                                                [bya bxa 0 a-z-offset]))))
+        same-row? (and (= bya byb) (= bxa bxb))]
+    (-> (assoc between 0 (if (= a start-point)
+                           [bya bxa a-z-offset (if same-row? b-z-offset (count row-a))]
+                           [byb bxb b-z-offset (if same-row? a-z-offset (count row-b))]))
+        (as-> between
+              (if same-row?
+                between
+                (assoc between (dec (count between)) (if (= a start-point)
+                                                       [byb bxb (if same-row? a-z-offset 0) b-z-offset]
+                                                       [bya bxa (if same-row? b-z-offset 0) a-z-offset])))))))
 
-    state)
-  )
+(defn format-selection-rows
+  "Get the visual dimension of the selected row"
+  [{:keys [char-width buffer] :as state} selection-list]
+  (->> (map (fn [[by bx start end :as cord]]
+              (let [row (-> (get-in state [:buffer by bx])
+                            (subs start end))
+                    visual-row-index (buffer-cord->y buffer by bx)]
+                {:width       (* (count row) char-width)
+                 :top         (* (line-height state) (dec visual-row-index))
+                 :left        (* start char-width)
+                 :buffer-cord cord})) selection-list)
+       (assoc state :selections)))
 
 (defn process-mouse-move
   [{:keys [styles] :as state} {:keys [js-evt]}]
@@ -687,33 +685,61 @@
       (when (in-editor? mouse styles)
         (-> (assoc-in state [:mouse :end] mouse)
             (assoc :cursor (clamp-cursor state mouse))
-            (as-> state (select-rows-between-v2 state (get-in state [:mouse :start]) (get state :cursor)))
-            (as-> state (assoc state :selections (select-rows-between
-                                                   state
-                                                   (get-in state [:mouse :start])
-                                                   (get state :cursor)
-                                                   (get-in state [:styles :line-height])))))))))
+            (as-> state
+                  (format-selection-rows state
+                                         (select-rows-between state
+                                                              (get-in state [:mouse :start])
+                                                              (get state :cursor)))))))))
+
+(defn selections->txt
+  [{:keys [selections] :as state}]
+  (loop [s-string ""
+         prev-by nil
+         selections selections]
+    (if (empty? selections)
+      (s/trim s-string)
+      (let [[by bx start end] (:buffer-cord (first selections))
+            s (-> (get-in state [:buffer by bx])
+                  (subs start end))]
+        (recur (str s-string (if (= prev-by by) s (str "\n" s)))
+               by
+               (rest selections))))))
 
 (defn handle-copy
   [state {:keys [js-evt]}]
+  (let [selection-txt (selections->txt state)]
+    (js-invoke (.-clipboard js/navigator) "writeText" selection-txt))
   state)
 
-(defn handle-paste
+(defn handle-cut
   [state {:keys [js-evt]}]
-  (let [clipboard-data (aget js-evt "clipboardData")
-        txt (js-invoke clipboard-data "getData" "text")]
-    (println txt)
-    state))
+  state)
+
+
+(defn handle-paste
+  [{:keys [char-width] :as state} {:keys [js-evt]}]
+  (-> js/navigator
+      .-clipboard
+      .readText
+      (.then (fn [data] (println "EYEEEEEES " (txt->buffer data char-width (editor-width state))))))
+  state)
 
 (defn handle-mouse-event
   [state {:keys [mouse-type] :as data}]
-  ;(js/console.log (:js-evt data))
   (condp = mouse-type
     :mousemove (process-mouse-move state data)
     :mousedown (process-mouse-down state data)
     :mouse-right-down nil                                   ;; TODO
     :mouseup (process-mouse-up state data)
     (js/console.warn "Unable to process mouse event: " type)))
+
+(defn handle-clipboard-event
+  [state {:keys [type] :as data}]
+  (condp = type
+    :copy (handle-copy state data)
+    :paste (handle-paste state data)
+    :cut (handle-cut state data)
+    (js/console.warn "Unable to process clipboard event: " type)))
 
 (defn mutate!
   [state-atom mutate-fn mutate-args]
@@ -728,8 +754,7 @@
     :key-pressed (mutate! state-atom process-key data)
     :mouse-event (mutate! state-atom handle-mouse-event data)
 
-    :copy (handle-copy @state-atom data)
-    :paste (mutate! state-atom handle-paste data)
+    :clipboard (mutate! state-atom handle-clipboard-event data)
 
     :measure-char (swap! state-atom assoc
                          :char-width (:char-width data)
@@ -776,8 +801,14 @@
                                             [
                                              (listen (interop/get-element-by-id "editor-input") "keydown")
                                              (listen (interop/get-element-by-id "editor-input") "keyup")
-                                             (listen (interop/get-element-by-id "editor-input") "copy")
-                                             (listen interop/document "paste")
+
+                                             ;(listen (interop/get-element-by-id "editor-input") "copy")
+                                             ;(listen (interop/get-element-by-id "editor-input") "paste")
+                                             ;(listen (interop/get-element-by-id "editor-input") "cut")
+
+                                             (listen js/window "copy")
+                                             (listen js/window "paste")
+
                                              (listen interop/document "mousedown")
                                              (listen interop/document "mouseup")
                                              (listen interop/document "mousemove")])]
@@ -793,12 +824,9 @@
                                                 (trigger-event :key-pressed {:key-type type
                                                                              :key      (.-key evt)}))
 
-                                              (when (= type :copy)
-                                                (trigger-event :copy {:js-evt evt}))
-
-                                              (when (= type :paste)
-                                                (trigger-event :paste {:js-evt evt}))
-
+                                              (when (contains? #{:copy :paste :cut} type)
+                                                (trigger-event :clipboard {:type   type
+                                                                           :js-evt evt}))
                                               (recur)
                                               )))))
        :reagent-render      (fn []
