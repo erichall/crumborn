@@ -69,3 +69,22 @@
 (defn is-nan? [x] (js/isNaN x))
 (defn not-nan? [x] (not (is-nan? x)))
 (defn querySelectorAll [el q] (js-invoke el "querySelectorAll" q))
+
+(defn read-clipboard-txt
+  [callback]
+  (-> js/navigator
+      .-clipboard
+      .readText
+      (.then callback)))
+
+(defn write-to-clipboard!
+  [data]
+  (js-invoke (.-clipboard js/navigator) "writeText" data))
+
+(defn scroll-to!
+  [x y]
+  (.scrollTo js/window x y))
+
+(defn scroll-by!
+  [x y]
+  (.scrollBy js/window x y))
