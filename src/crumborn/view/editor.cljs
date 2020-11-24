@@ -76,9 +76,9 @@
   {:buffer      "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
    :selection   []
    :keys-down   #{}
-   :cursor      {:x        0
-                 :x-screen 0
+   :cursor      {:x        50                               ;; TODO
                  :y        0
+                 :x-screen 50
                  :y-screen 0
                  :max-x    nil}
    :mouse       {:is-down false
@@ -89,16 +89,22 @@
    :char-width  nil                                         ; must measure this......
    :styles      {:line-height   21                          ; https://grtcalculator.com/
                  :font-size     12
-                 :editor-width  100
+                 :editor-width  500
                  :editor-height 900}
    })
+
+(def gutter-offset-x 50)
 
 (when-not @state-atom
   (reset! state-atom initial-state))
 
+(defn cursor-x
+  [{:keys [cursor]} & values]
+  (apply + 50 (:x cursor)) values)
+
 (defn editor-width
   [{:keys [styles]}]
-  (:editor-width styles))
+  (- (:editor-width styles) gutter-offset-x))
 
 (defn line-height
   [{:keys [styles]}]
@@ -107,6 +113,12 @@
 (defn font-size
   [{:keys [styles]}]
   (:font-size styles))
+
+(defn line-max-chars
+  ([{:keys [char-width] :as state}]
+   (/ (editor-width state) char-width))
+  ([editor-width char-width]
+   (/ (- editor-width gutter-offset-x) char-width)))
 
 (defn- listen
   [element type]
@@ -118,45 +130,6 @@
   [s i]
   (->> (split-at i s)
        (mapv (partial s/join ""))))
-
-(defn partition-buffer
-  "Partitions a buffer into rows by first splitting at \n and then
-  applying max amount of chars in one row and splitting there after.
-
-  PROBLEM y->row
-  now when we use a gap buffer, it seems to be difficult to map y to a row,
-  we need the row because we need to clamp the cursor to maximum of the row length.
-  This layout:
-  |123____|
-  |11_____|
-  |1234567| < overflow no \n
-  |89_____|
-  would look like this in the gap-buffer
-  123\n11\n123456789
-  => split nl => [123, 11, 123456789]
-  say each char is 1 coordinate px, clicking on [3,2] => 4, i.e index 10, clicking on [1,3] => 0, i.e index 15\n,
-  do we have a 2d array if we split it maybe => [123,     11,\n;;     123456789]
-  we could of course, count, each newline and each overflow, maybe, if we chunk the gap-buffer up in either
-  [\n] or by [max char width] we actually get the rows, so first, split by, then iterate through and split by max-width?
-  I guess this is really bad performance wise but...... :)
-  "
-  {:test (fn []
-           (is (= (partition-buffer "123\n11\n123456789" 1 7)
-                  ["123" "11" "1234567" "89"]))
-           (is (= (partition-buffer "" 1 7) [""]))
-           (is (= (partition-buffer "dont" 1 7) ["dont"])))}
-  [buffer char-width editor-width]
-  (let [max-chars (/ editor-width char-width)]
-    (->> (s/split-lines buffer)
-         ;(map (fn [r] (str r "\n")))
-         (reduce (fn [rows row]
-                   (let [width (* char-width (count row))]
-                     (if (> width editor-width)
-                       (->> (concat rows (->> (split-at max-chars row)
-                                              (map (partial s/join ""))
-                                              ))
-                            (into []))
-                       (conj rows row)))) []))))
 
 (defn y->row
   "Maps a y-coordinate to a row.
@@ -190,6 +163,10 @@
       (nth rows row-number)
       (last rows))))
 
+(defn chars-in-row->px
+  [row char-width]
+  (* char-width (count row)))
+
 (defn clamp-to-chars
   {:test (fn []
            (is (= (clamp-to-chars {:char-width 1} "hej" 1.6) 2))
@@ -205,7 +182,7 @@
         clamped-val (if (<= value-range mid-range)
                       (- value value-range)
                       (+ char-width (- value value-range)))]
-    (max 0 (min (* char-width (count row)) clamped-val))))
+    (max gutter-offset-x (min (chars-in-row->px row char-width) clamped-val))))
 
 ;; TODO this is frekking missleadidng fn.... and i guess its wrong??
 (defn clamp-cursor
@@ -264,22 +241,23 @@
       flatten
       count))
 
+;; 100 % broken now
 (defn inc-cursor-x
   "Increase cursor position x with one char"
   [{:keys [char-width cursor buffer] :as state}]
   (let [[by bx] (->>
                   (y->row-index state (:y cursor))
                   (y->buffer-cord buffer))
-        row (get-in state [:buffer by bx])
-        max-width (* (count row) char-width)]
-    (update-in state [:cursor :x] (fn [x] (min max-width (+ char-width x))))))
+        row (get-in state [:buffer by bx])]
+    (update-in state [:cursor :x] (fn [x] (+ gutter-offset-x (min (chars-in-row->px row char-width)) (+ char-width x))))))
 
+;; TODO
 (defn dec-cursor-x
   "Decrease cursor position x with one char"
   [{:keys [cursor char-width] :as state}]
   (let [row (y->row state (:y cursor))]
-    (update-in state [:cursor :x] #(max 0 (->> (- % char-width)
-                                               (clamp-to-chars state row))))))
+    (update-in state [:cursor :x] #(+ gutter-offset-x (max 0 (->> (- % char-width)
+                                                                  (clamp-to-chars state row)))))))
 
 (defn set-cursor
   [state x y]
@@ -298,8 +276,8 @@
     (set-cursor state (* char-width (count row)) (:y cursor))))
 
 (defn x->char-pos
-  [{:keys [char-width]} x]
-  (/ x char-width))
+  [{:keys [char-width cursor]}]
+  (/ (:x cursor) char-width))
 
 (defn number-of-lines
   [{:keys [buffer]}]
@@ -321,32 +299,30 @@
         n-buffer-rows (count buffer)]
     (if (= bx (dec row-buffer-len))
       (get-in buffer [(min (dec n-buffer-rows) (inc by)) 0])
-      (get-in buffer [by (inc bx)])
-      )))
+      (get-in buffer [by (inc bx)]))))
 
+;; SET CURSOR
 (defn dec-cursor-y
   [{:keys [cursor buffer styles char-width] :as state}]
   (let [[by bx] (->>
                   (y->row-index state (:y cursor))
                   (y->buffer-cord buffer))
-        ra (row-above buffer by bx)
-        state (->
-                (assoc-in state [:cursor :x] (clamp-to-chars state ra (:max-x cursor)))
-                (update-in [:cursor :y] (fn [y] (max 0 (- y (:line-height styles))))))]
-    state
-    ))
+        ra (row-above buffer by bx)]
+    (->
+      (assoc-in state [:cursor :x] (clamp-to-chars state ra (:max-x cursor)))
+      (update-in [:cursor :y] (fn [y] (max 0 (- y (:line-height styles))))))))
 
+;; SET CURSOR
 (defn inc-cursor-y
   [{:keys [buffer cursor styles] :as state}]
   (let [[by bx] (->>
                   (y->row-index state (:y cursor))
                   (y->buffer-cord buffer))
-        rb (row-below buffer by bx)
-        state (->
-                (assoc-in state [:cursor :x] (clamp-to-chars state rb (:max-x cursor)))
-                (update-in [:cursor :y] (fn [y] (max (number-of-lines state)
-                                                     (+ y (:line-height styles))))))]
-    state))
+        rb (row-below buffer by bx)]
+    (->
+      (assoc-in state [:cursor :x] (clamp-to-chars state rb (:max-x cursor)))
+      (update-in [:cursor :y] (fn [y] (max (number-of-lines state)
+                                           (+ y (:line-height styles))))))))
 
 (defn str-insert
   {:test (fn [] (is (= (str-insert "hej" "B" 1) "hBej")))}
@@ -434,8 +410,8 @@
                   (y->buffer-cord buffer))
         [f & rest] (s/split txt #"\n" 2)
         row (get-in buffer [by bx])
-        max-chars (/ (editor-width state) char-width)
-        line-group (->> (/ (:x cursor) char-width)
+        max-chars (line-max-chars state)
+        line-group (->> (x->char-pos state)
                         (str-insert row f)
                         (assoc (get-in state [:buffer by]) bx)
                         (partition-buffer-row max-chars))]
@@ -453,8 +429,8 @@
                   (y->row-index state (:y cursor))
                   (y->buffer-cord buffer))
         row (get-in buffer [by bx])
-        max-chars (/ (editor-width state) char-width)
-        line-group (->> (/ (:x cursor) char-width)
+        max-chars (line-max-chars state)
+        line-group (->> (x->char-pos state)
                         (str-insert row key)
                         (assoc (get-in state [:buffer by]) bx)
                         (partition-buffer-row max-chars))]
@@ -478,7 +454,7 @@
   (let [row-index (y->row-index state (:y cursor))
         [by bx] (y->buffer-cord buffer row-index)
         row (get-in buffer [by bx])
-        max-chars (/ (editor-width state) char-width)
+        max-chars (line-max-chars state)
         buffer-row (get-in state [:buffer by])]
     (cond
       ;; we are inside the same row-group
@@ -557,6 +533,7 @@
     #"Meta" (-> (update state :keys-down conj (keyword key)))
     #"Alt" nil
     #"Tab" nil                                              ;; TODO
+    #"Control" nil
     #"ArrowRight" (-> (update state :keys-down conj (keyword key))
                       (assoc :selections [])
                       inc-cursor-x
@@ -602,11 +579,22 @@
   (let [{:keys [left top]} (interop/get-bounding-client-rect el)
         x (interop/mouse-x js-evt)
         y (interop/mouse-y js-evt)]
-    (js/console.log "SSSSSSSSSSS" js-evt)
-    {:x        (- x left)
+    (println "LEFT " left " AND X GET " x (- x left) " AND Y " y)
+    {:x        (+ 50 (- x left))
      :y        (- y top)
      :x-screen x
      :y-screen y}))
+
+(defn get-relative-cords
+  [el x y]
+  (if el
+    (let [{:keys [left top]} (interop/get-bounding-client-rect el)]
+      {:x (+ x left)
+       :y (+ y top)})
+    {:x 0
+     :y 0}
+    )
+  )
 
 (defn clamp-to-row
   {:test (fn []
@@ -623,6 +611,7 @@
   (and (>= x 0) (<= x editor-width)
        (>= y 0) (<= y editor-height)))
 
+;; SET CURSOR
 (defn process-mouse-down
   [{:keys [styles] :as state} {:keys [js-evt]}]
   (let [mouse (->> (get-dom-el "editor-area") (get-relative-mouse-cords js-evt))]
@@ -633,6 +622,7 @@
           (assoc :selections [])
           (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x)))))))
 
+;; SET CURSOR
 (defn process-mouse-up
   [state {:keys [js-evt]}]
   (update-in state [:mouse] assoc
@@ -811,11 +801,10 @@
     (js/console.warn "Unable to handle event" name data)))
 
 (defn active-row
-  [{:keys [state]}]
+  [{:keys [state current-row]}]
   (let [editor-width (editor-width state)
         line-height (line-height state)
-        font-size (font-size state)
-        row-index (y->row-index state (get-in state [:cursor :y]))]
+        font-size (font-size state)]
     (when (empty? (:selections state))
       [:div {:id         "active-row"
              :tab-index  -1
@@ -828,7 +817,7 @@
                           :-webkit-user-select "none"
                           :cursor              "text"
                           :z-index             -2
-                          :top                 (str (* line-height row-index) "px")
+                          :top                 (str (* line-height current-row) "px")
                           :height              (str line-height "px")
                           :line-height         (str line-height "px")
                           :word-break          "break-all"
@@ -874,67 +863,90 @@
                                               (recur)
                                               )))))
        :reagent-render      (fn []
-                              (let [{:keys [buffer selections char-width cursor styles] :as state} @state-atom]
+                              (let [{:keys [buffer selections char-width cursor] :as state} @state-atom
+                                    current-row (y->row-index state (:y cursor))
+                                    flatten-buffer (flatten buffer)]
                                 ;(cljs.pprint/pprint @state-atom)
                                 ;(println (s/split-lines (:uffer @state-atom)))
-                                [:div {:on-click (fn [] (.focus (interop/get-element-by-id "editor-input")))}
+                                [:div {:on-click (fn [e]
+                                                   (.preventDefault e)
+                                                   (.focus (interop/get-element-by-id "editor-input")))}
                                  [:div {:style {:margin-bottom "20px"}} "toolbar"]
+                                 [:div {:position "relative"}
+                                  [:div {:id    "gutter"
+                                         :style {:width            "50px"
+                                                 :float            "left"
+                                                 :background-color "#e8e8e8"
+                                                 :direction        "rtl"
+                                                 :padding-right    "10px"
+                                                 :display          "inline-block"
+                                                 :height           (str (* (line-height state) (count flatten-buffer)) "px")
+                                                 :color            "#AAA"}}
+                                   (doall (map-indexed (fn [i _]
+                                                         [:span {:key   (str "row-num-" i)
+                                                                 :style {
+                                                                         ;:display     "inline-block"
+                                                                         :position    "absolute"
+                                                                         :float       "right"
+                                                                         :height      "21px"
+                                                                         :font        "Monaco"
+                                                                         :font-family "monospace"
+                                                                         :font-size   (font-size state)
+                                                                         :top         (+ 205 (* i (line-height state)))}} (inc i)]
+                                                         ) flatten-buffer))]
+                                  (let [{:keys [x y]} (get-relative-cords (interop/get-element-by-id "editor-area") (:x cursor) (:y cursor))]
+                                    [:textarea {:id          "editor-input"
+                                                :on-blur     (fn [] (.focus (interop/get-element-by-id "editor-input")))
+                                                :rows        1
+                                                :wrap        "soft"
+                                                :spell-check false
+                                                :style       {:width    "1px"
+                                                              :position "absolute"
+                                                              :height   "1px"
+                                                              :top      (str y "px")
+                                                              :left     (str x "px")
+                                                              :opacity  0
+                                                              :border   "none"
+                                                              :resize   "none"
+                                                              :outline  "none"}}])
 
-
-                                 [:div
                                   [:div {:id         "editor-area"
                                          :tab-index  0
-                                         :on-click   (fn [e]
-                                                       (.preventDefault e)
-                                                       (.focus (interop/get-element-by-id "editor-input")
-                                                               (js-obj "preventScroll" true))) ;; TODO
+                                         :on-click   (fn [] (.focus (interop/get-element-by-id "editor-input")))
                                          :draggable  false
                                          :userselect "none"
-                                         :style      {:position            "absolute"
-                                                      :width               (str (get-in @state-atom [:styles :editor-width]) "px")
-                                                      :height              (str (get-in @state-atom [:styles :editor-height]) "px")
+                                         :style      {:border              "1px solid blue"
+                                                      :box-sizing          "border-box"
+                                                      :height              (str (* (count flatten-buffer) (line-height state)) "px")
+                                                      :position            "absolute"
+                                                      :margin-left         (str gutter-offset-x "px")
+
+                                                      :width               (str (editor-width state) "px")
                                                       :outline             "none"
                                                       :-webkit-user-select "none"
                                                       :cursor              "text"
-                                                      :line-height         (str (get-in @state-atom [:styles :line-height]) "px")
-                                                      :font-size           (str (get-in @state-atom [:styles :font-size]) "px")
+                                                      :line-height         (str (line-height state) "px")
+                                                      :font-size           (str (font-size state) "px")
                                                       :background-color    "transparent"
                                                       :font                "Monaco"
                                                       :font-family         "monospace"}}
-                                   (map (fn [row]
-                                          [:div {:style {:width    "50px"
-                                                         :top      (str (* (inc row) (:line-height styles)) "px")
-                                                         :position "absolute"}}]
-                                          ) (range (number-of-lines state)))
-                                   [:textarea {:id          "editor-input"
-                                               :on-blur     (fn [e]
-                                                              (.preventDefault e)
-                                                              (.focus (interop/get-element-by-id "editor-input")
-                                                                      (js-obj "preventScroll" true)))
-                                               :on-change   (fn [e] (.preventDefault e))
-                                               :rows        1
-                                               :wrap        "soft"
-                                               :spell-check false
-                                               :style       {:width    "1px"
-                                                             :position "fixed"
-                                                             :height   "1px"
-                                                             :top      (str (get-in cursor [:y]) "px")
-                                                             :left     (str (get-in cursor [:x]) "px")
-                                                             :opacity  0
-                                                             :border   "none"
-                                                             :resize   "none"
-                                                             :outline  "none"
-                                                             }}]
-                                   [active-row {:state @state-atom}]
+
+                                   [active-row {:state state :current-row current-row}]
                                    (when char-width
-                                     (doall (map-indexed (fn [i row-group] [:div {:key   (str "row-" i)
-                                                                                  :id    (str "row-" i)
-                                                                                  :style {:cursor      "text"
-                                                                                          :font-family "monospace"
-                                                                                          :white-space "pre"
-                                                                                          :display     "inline-block"
-                                                                                          :width       "100%"}}
-                                                                            row-group]) (flatten buffer))))]]
+                                     (doall (map-indexed (fn [i row] [:div {:key   (str "row-" i)
+                                                                            :id    (str "row-" i)
+                                                                            :style {:cursor      "text"
+                                                                                    :font-family "monospace"
+                                                                                    :white-space "pre"
+                                                                                    :line-height (str (line-height state) "px")
+                                                                                    :height      (str (line-height state) "px")
+                                                                                    :top         (str (* i (line-height state)) "px")
+                                                                                    :position    "absolute"
+                                                                                    :display     "inline-block"
+                                                                                    :width       "100%"}}
+                                                                      row]) (flatten buffer))))]]
+
+
                                  [:div {:id         "selections"
                                         :draggable  false
                                         :tab-index  -1
@@ -961,14 +973,14 @@
                                                         ) selections))]
                                  [:div {:id    "caret"
                                         :style {
-                                                :transform (str "translate(" (get-in @state-atom [:cursor :x]) "px," (* (get-in @state-atom [:styles :line-height]) (y->row-index @state-atom (get-in @state-atom [:cursor :y]))) "px)") ;; TODO
+                                                :transform (str "translate(" (:x cursor) "px," (* (line-height state) current-row) "px)") ;; TODO
                                                 :animation (when (empty? (get @state-atom :keys-down)) "typing 3.5s steps(40, end), blink-caret .75s step-end infinite")
                                                 :opacity   "0.3"
                                                 :display   "block"
                                                 :border    "1px solid black"
                                                 :position  "absolute"
                                                 :cursor    "text"
-                                                :height    (str (get-in @state-atom [:styles :line-height]) "px")
+                                                :height    (str (line-height state) "px")
                                                 :width     "1px"}}]
                                  (when-not char-width
                                    [:div {:id    "ruler"
@@ -976,7 +988,7 @@
                                                   :display     "inline-block"
                                                   :white-space "nowrap"
                                                   :font-family "monospace"
-                                                  :font-size   (str (get-in @state-atom [:styles :font-size]) "px")
+                                                  :font-size   (str (font-size state) "px")
                                                   }
                                           } "!"])
                                  ]))})))
