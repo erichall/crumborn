@@ -1,6 +1,8 @@
 (ns crumborn.interop)
 
 (defn setup-listener!
+  ([obj event-type callback args]
+   (.addEventListener obj event-type callback args))
   ([obj event-type callback]
    (.addEventListener obj event-type callback))
   ([event-type callback]

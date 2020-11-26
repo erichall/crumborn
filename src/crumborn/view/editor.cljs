@@ -26,12 +26,44 @@
 ;; [X] hide the active row if selection is present
 ;; [X] disable caret flashing while typing?
 ;; [X] fix when right clicking on selection so it still active
-;; [] add all different keys
+;; [X] add all different keys
 ;; [X] refactor select rows
 ;; [X] fix scrolling when clicking on a row
-;; [] add scrolling when cursor moves
-;; [] fix relative mouse cords for rows numbers and textarea, its brooooken
+;; [X] fix relative mouse cords for rows numbers and textarea, its brooooken
+;; [] Think of something better to separate cursor movement from the rest of the jazz, and especially something
+;;    that does not involve coordinates and offsetting with a dam gutter......
+;; [X] add scrolling when cursor moves
+;; [] fix bug when copy empty rows, the \n seems to no follow
+;; [] fix when cut whole row, the row should not collapse
+;; [] fix undo
 
+
+(defonce state-atom (r/atom nil))
+(def initial-state
+  {:buffer      "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
+   :selection   []
+   :keys-down   #{}
+   :cursor      {:x        50                               ;; TODO
+                 :y        0
+                 :x-screen 50
+                 :y-screen 0
+                 :max-x    nil}
+   :mouse       {:is-down false
+                 :start   {:x 0 :x-screen 0 :y 0 :y-screen 0}
+                 :end     {:x 0 :x-screen 0 :y 0 :y-screen 0}}
+   :active-line 0
+   :editable    true
+   :char-width  nil                                         ; must measure this......
+   :styles      {:line-height   21                          ; https://grtcalculator.com/
+                 :font-size     12
+                 :editor-width  500
+                 :editor-height 900}
+   })
+
+(def gutter-offset-x 50)
+
+(when-not @state-atom
+  (reset! state-atom initial-state))
 
 (defn get-lines
   [buffer]
@@ -71,37 +103,6 @@
                      (conj buffer (->> (partition-all max-chars row)
                                        (mapv (partial s/join "")))))) []))))
 
-(defonce state-atom (r/atom nil))
-(def initial-state
-  {:buffer      "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
-   :selection   []
-   :keys-down   #{}
-   :cursor      {:x        50                               ;; TODO
-                 :y        0
-                 :x-screen 50
-                 :y-screen 0
-                 :max-x    nil}
-   :mouse       {:is-down false
-                 :start   {:x 0 :x-screen 0 :y 0 :y-screen 0}
-                 :end     {:x 0 :x-screen 0 :y 0 :y-screen 0}}
-   :active-line 0
-   :editable    true
-   :char-width  nil                                         ; must measure this......
-   :styles      {:line-height   21                          ; https://grtcalculator.com/
-                 :font-size     12
-                 :editor-width  500
-                 :editor-height 900}
-   })
-
-(def gutter-offset-x 50)
-
-(when-not @state-atom
-  (reset! state-atom initial-state))
-
-(defn cursor-x
-  [{:keys [cursor]} & values]
-  (apply + 50 (:x cursor)) values)
-
 (defn editor-width
   [{:keys [styles]}]
   (- (:editor-width styles) gutter-offset-x))
@@ -121,10 +122,18 @@
    (/ (- editor-width gutter-offset-x) char-width)))
 
 (defn- listen
-  [element type]
-  (let [out (async/chan)]
-    (interop/setup-listener! element type (fn [evt] (async/put! out evt)))
-    out))
+  ([element type prevent-default?]
+   (let [out (async/chan)]
+     (interop/setup-listener! element type (fn [evt]
+
+                                             (when prevent-default?
+                                               (.preventDefault evt))
+
+                                             (async/put! out evt)
+                                             ))
+     out))
+  ([element type]
+   (listen element type false)))
 
 (defn split-str
   [s i]
@@ -241,7 +250,6 @@
       flatten
       count))
 
-;; 100 % broken now
 (defn inc-cursor-x
   "Increase cursor position x with one char"
   [{:keys [char-width cursor buffer] :as state}]
@@ -252,7 +260,6 @@
     (update-in state [:cursor :x] (fn [x]
                                     (min (+ gutter-offset-x (chars-in-row->px row char-width)) (+ char-width x))))))
 
-;; TODO
 (defn dec-cursor-x
   "Decrease cursor position x with one char"
   [{:keys [cursor char-width] :as state}]
@@ -302,7 +309,6 @@
       (get-in buffer [(min (dec n-buffer-rows) (inc by)) 0])
       (get-in buffer [by (inc bx)]))))
 
-;; SET CURSOR
 (defn dec-cursor-y
   [{:keys [cursor buffer styles char-width] :as state}]
   (let [[by bx] (->>
@@ -313,7 +319,6 @@
       (assoc-in state [:cursor :x] (clamp-to-chars state ra (:max-x cursor)))
       (update-in [:cursor :y] (fn [y] (max 0 (- y (:line-height styles))))))))
 
-;; SET CURSOR
 (defn inc-cursor-y
   [{:keys [buffer cursor styles] :as state}]
   (let [[by bx] (->>
@@ -494,7 +499,7 @@
           (as-> state (assoc-in state [:buffer] (drop-nth (:buffer state) by))) ;; I think these are a bit awkward, changing state at the same time needed stuff from the changed state
           (set-cursor (+ gutter-offset-x (* char-width (count row-above))) (- (:y cursor) (:line-height styles)))))
       :else
-      (let [removed-row (remove-char-at row (/ (- (:x cursor) char-width) (+ gutter-offset-x char-width)))
+      (let [removed-row (remove-char-at row (/ (- (:x cursor) char-width gutter-offset-x) char-width))
             row-group (->> (if (empty? removed-row) " " removed-row) ;; " " so row doesn't collapse when deleting the last char
                            (assoc buffer-row bx)
                            (partition-buffer-row max-chars))]
@@ -521,7 +526,7 @@
         [by bx] (y->buffer-cord buffer row-index)
         row (get-in state [:buffer by bx])
         buffer-row (get-in state [:buffer by])
-        x-offset (/ (:x cursor) char-width)
+        x-offset (/ (- (:x cursor) gutter-offset-x) char-width)
         [first second] (split-str row x-offset)
         rest-buffer-row (subvec buffer-row (inc bx))]
     (->
@@ -531,25 +536,6 @@
       inc-cursor-y
       set-cursor-start)))
 
-(defn key-down?
-  [{:keys [keys-down]} key]
-  (contains? keys-down key))
-
-(defn process-multi-key-down
-  [state {:keys [key]}]
-  (let [keys-down (conj (:keys-down state) (keyword key))]
-    (println "E" keys-down)
-    (condp = keys-down
-      #{:a :b} (println "CMON" keys-down)
-      ;[ :b] (println "BOTH A AND B")
-      nil
-      )
-    )
-  )
-
-(def single-char-regexp #"^[a-zA-Z0-9.!@?#\"$%&:\';()*\+,\/;\-=\[\]\^_\{|\}<>~` ]$")
-
-(defn one? [v] (= 1 (count v)))
 
 (defn selections->txt
   [{:keys [selections] :as state}]
@@ -570,57 +556,86 @@
   (swap! state-atom (fn [state] (if-let [new-state (mutate-fn state mutate-args)]
                                   new-state
                                   state))))
+
+(defn find-key-command-handler
+  [commands keys-down]
+  (loop [commands (partition 2 commands)]
+    (if-not (empty? commands)
+      (let [[combo handler] (first commands)
+            combo (if (vector? combo) combo [combo])
+            is-handler? (loop [keys keys-down]
+                          (if (empty? keys)
+                            false
+                            (if (some (fn [c] (= c keys)) combo)
+                              keys
+                              (recur (into #{} (rest keys))))))]
+        (if is-handler?
+          (partial handler is-handler?)
+          (recur (rest commands)))))))
+
 (defn process-key-down
   [state {:keys [key] :as data}]
   (let [keys-down (conj (:keys-down state) (keyword key))
-        state (assoc state :keys-down keys-down)]
-    (println keys-down (= keys-down #{:Tab}))
-    ;(if (re-matches single-char-regexp key)
-    ;  (process-char (assoc state :selections []) key)
-    (condp = keys-down
-      #{:Meta :c} (do (->> (selections->txt state)
-                           interop/write-to-clipboard!)
-                      state)
-      #{:Meta :v} (do
-                    ;; hmmm might not be the best solution
-                    (interop/read-clipboard-txt (fn [data]
-                                                  (println "AAAAAAAAAAAAAAAAAA??" data)
-                                                  (mutate! state-atom insert-text-in-buffer data)))
-                    state)
-      #{:Meta :x} (let [{:keys [removed-txt buffer]} (remove-text-in-buffer state)]
-                    (do
-                      (interop/write-to-clipboard! removed-txt)
-                      (-> (assoc state :buffer buffer)
-                          (assoc :selections []))))
-      #{:Enter} (-> (assoc state :selections [])
-                    process-enter)
-      #{:Shift} state
-      #{:Meta} state
-      #{:Alt} state
-      #{:Tab} (process-char (assoc state :selections []) "\t") ;; TODO inc cursor with 4
-      #{:Control} state
-      #{:ArrowRight} (-> (assoc state :selections [])
-                         inc-cursor-x
-                         (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x))))
-      #{:ArrowLeft} (-> (assoc state :selections [])
-                        dec-cursor-x
-                        (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x))))
-      #{:ArrowUp} (-> (assoc state :selections [])
-                      dec-cursor-y)
-      #{:ArrowDown} (-> (assoc state :selections [])
-                        inc-cursor-y)
-      #{:Backspace} (->                                     ;; TODO handle selections here also...
-                      (assoc state :selections [])
-                      process-backspace)
-      (process-char (assoc state :selections []) key)
-      )))
+        state (assoc state :keys-down keys-down)
+        commands [
+                  #{:Meta :c}
+                  (fn [key state] (do (->> (selections->txt state)
+                                           interop/write-to-clipboard!)
+                                      state))
+                  #{:Meta :v}
+                  (fn [key state] (do
+                                    (interop/read-clipboard-txt (fn [data]
+                                                                  (mutate! state-atom insert-text-in-buffer data)))
+                                    state))
+                  #{:Meta :x}
+                  (fn [key state] (let [{:keys [removed-txt buffer]} (remove-text-in-buffer state)]
+                                    (do
+                                      (interop/write-to-clipboard! removed-txt)
+                                      (-> (assoc state :buffer buffer)
+                                          (assoc :selections [])))))
+                  #{:Enter}
+                  (fn [key state] (-> (assoc state :selections [])
+                                      process-enter))
+                  [#{:Shift} #{:Meta} #{:Alt} #{:Control}]
+                  (fn [key state] state)
+                  #{:Tab}
+                  (fn [key state] (process-char (assoc state :selections []) "\t")) ;; TODO inc cursor with 4
+                  #{:ArrowRight}
+                  (fn [key state] (-> (assoc state :selections [])
+                                      inc-cursor-x
+                                      (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x)))))
+                  #{:ArrowLeft}
+                  (fn [key state] (-> (assoc state :selections [])
+                                      dec-cursor-x
+                                      (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x)))))
+                  #{:ArrowUp}
+                  (fn [key state] (-> (assoc state :selections [])
+                                      dec-cursor-y))
+                  #{:ArrowDown}
+                  (fn [key state] (-> (assoc state :selections [])
+                                      inc-cursor-y))
+                  #{:Backspace}
+                  (fn [key state] (->                       ;; TODO handle selections here also...
+                                    (assoc state :selections [])
+                                    process-backspace))
+                  ;; all chars http://www.asciitable.com/ only ascii chars, that will be a problem
+                  (mapv (fn [a] #{(keyword (char a))}) (range 32 127))
+                  (fn [key state] (process-char (assoc state :selections []) (name (first key))))
+                  ]
+        handler (find-key-command-handler commands keys-down)]
+    (if handler
+      (handler state)
+      state
+      )
+    ))
 ;)
 
-
 (defn process-key-up
-  [state {:keys [key]}]
-  (println "KEYS UP " (keyword key))
-  (update state :keys-down disj (keyword key)))
+  [{:keys [keys-down] :as state} {:keys [key]}]
+  ;; just clear it if we press meta.. https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
+  (if (contains? keys-down :Meta)
+    (assoc state :keys-down #{})
+    (update state :keys-down disj (keyword key))))
 
 (defn process-key
   [state {:keys [key-type] :as data}]
@@ -665,15 +680,18 @@
       int))
 
 (defn in-editor?
-  [{:keys [x y]} {:keys [editor-width editor-height]}]
-  (and (>= x gutter-offset-x) (<= x editor-width)
-       (>= y 0) (<= y editor-height)))
+  [state mouse]
+  (let [n-lines (number-of-lines state)
+        x (:x mouse)
+        y (:y mouse)]
+    (and (>= x gutter-offset-x) (<= x (editor-width state))
+         (>= y 0) (<= y (* n-lines (line-height state))))))
 
 ;; SET CURSOR
 (defn process-mouse-down
-  [{:keys [styles] :as state} {:keys [js-evt]}]
+  [state {:keys [js-evt]}]
   (let [mouse (->> (get-dom-el "editor-area") (get-relative-mouse-cords js-evt))]
-    (when (in-editor? mouse styles)
+    (when (in-editor? state mouse)
       (-> (assoc-in state [:mouse :start] mouse)
           (assoc-in [:mouse :is-down] true)
           (assoc :cursor (clamp-cursor state mouse))
@@ -765,8 +783,9 @@
   (->> (map (fn [[by bx start end :as cord]]
               (let [row (-> (get-in state [:buffer by bx])
                             (subs start end))
-                    visual-row-index (buffer-cord->y buffer by bx)]
-                {:width       (* (count row) char-width)
+                    visual-row-index (buffer-cord->y buffer by bx)
+                    width (* (count row) char-width)]
+                {:width       (if (> width 0) width char-width)
                  :top         (* (line-height state) (dec visual-row-index))
                  :left        (+ gutter-offset-x (* start char-width))
                  :buffer-cord cord})) selection-list)
@@ -776,7 +795,7 @@
   [{:keys [styles] :as state} {:keys [js-evt]}]
   (when (get-in state [:mouse :is-down])
     (let [mouse (->> (get-dom-el "editor-area") (get-relative-mouse-cords js-evt))]
-      (when (in-editor? mouse styles)
+      (when (in-editor? state mouse)
         (-> (assoc-in state [:mouse :end] mouse)
             (assoc :cursor (clamp-cursor state mouse))
             (as-> state
@@ -784,40 +803,6 @@
                                          (select-rows-between state
                                                               (get-in state [:mouse :start])
                                                               (get state :cursor)))))))))
-
-;(defn selections->txt
-;  [{:keys [selections] :as state}]
-;  (loop [s-string nil
-;         prev-by nil
-;         selections selections]
-;    (if (empty? selections)
-;      s-string
-;      (let [[by bx start end] (:buffer-cord (first selections))
-;            s (-> (get-in state [:buffer by bx])
-;                  (subs start end))]
-;        (recur (str s-string (if (= prev-by by) s (if (nil? s-string) s (str "\n" s))))
-;               by
-;               (rest selections))))))
-
-(defn handle-copy
-  [state {:keys [js-evt]}]
-  (->> (selections->txt state)
-       interop/write-to-clipboard!))
-
-(defn handle-cut!
-  [state {:keys [js-evt]}]
-  (let [{:keys [removed-txt buffer]} (remove-text-in-buffer state)]
-    (do
-      (interop/write-to-clipboard! removed-txt)
-      (-> (assoc state :buffer buffer)
-          (assoc :selections [])))))
-
-
-
-(defn handle-paste!
-  [state-atom {:keys [js-evt]}]
-  (interop/read-clipboard-txt (fn [data]
-                                (mutate! state-atom insert-text-in-buffer data))))
 
 (defn handle-mouse-event
   [state {:keys [mouse-type] :as data}]
@@ -828,25 +813,12 @@
     :mouseup (process-mouse-up state data)
     (js/console.warn "Unable to process mouse event: " type)))
 
-(defn handle-clipboard-event
-  [state-atom {:keys [type] :as data}]
-  (let [state (deref state-atom)]
-    (condp = type
-      :copy (handle-copy state data)
-      :paste (handle-paste! state-atom data)
-      :cut (mutate! state-atom handle-cut! data)
-      (js/console.warn "Unable to process clipboard event: " type))))
-
-
 (defn handle-event!
   [name data]
   {:pre [(keyword? name)]}
   (condp = name
-
     :key-pressed (mutate! state-atom process-key data)
     :mouse-event (mutate! state-atom handle-mouse-event data)
-
-    :clipboard nil                                          ;(handle-clipboard-event state-atom data)
 
     :insert-txt (mutate! state-atom insert-text-in-buffer (:txt data))
 
@@ -896,14 +868,18 @@
          [:div {:id             :bold
                 :on-mouse-over  (fn [] (reset! hover-atom :bold))
                 :on-mouse-leave (fn [] (reset! hover-atom nil))
-                :on-click       (fn [] (trigger-event :insert-txt {:txt "**strong text**"}))
+                :on-click       (fn [evt]
+                                  (.preventDefault evt)
+                                  (trigger-event :insert-txt {:txt "**strong text**"}))
                 :style          {:cursor      "pointer"
                                  :opacity     (if (= hover :bold) 1 0.7)
                                  :font-weight "bold"}} "B"]
          [:div {:id             :emp
                 :on-mouse-over  (fn [] (reset! hover-atom :emp))
                 :on-mouse-leave (fn [] (reset! hover-atom nil))
-                :on-click       (fn [] (trigger-event :insert-txt {:txt "*emphasized text*"}))
+                :on-click       (fn [evt]
+                                  (.preventDefault evt)
+                                  (trigger-event :insert-txt {:txt "*emphasized text*"}))
                 :style          {:cursor      "pointer"
                                  :margin-left "10px"
                                  :opacity     (if (= hover :emp) 1 0.7)
@@ -911,13 +887,19 @@
          [:div {:id             :link
                 :on-mouse-over  (fn [] (reset! hover-atom :link))
                 :on-mouse-leave (fn [] (reset! hover-atom nil))
-                :on-click       (fn [] (trigger-event :insert-txt {:txt "[enter link description here][https://]\n"}))
+                :on-click       (fn [evt]
+                                  (.preventDefault evt)
+                                  (trigger-event :insert-txt {:txt "[enter link description here][https://]\n"}))
                 :style          {:cursor      "pointer"
                                  :margin-left "10px"
                                  :opacity     (if (= hover :emp) 1 0.7)
                                  :font-weight "bold"}} "\uD83D\uDD17"]
          ])))
   )
+
+(defn focus!
+  [el]
+  (js-invoke el "focus" (js-obj "preventScroll" true)))
 
 (defn editor
   []
@@ -930,17 +912,18 @@
                                                                               :width)}))
                               (let [chans (async/merge
                                             [
-                                             (listen (interop/get-element-by-id "editor-input") "keydown")
+                                             (listen (interop/get-element-by-id "editor-input") "keydown" false)
                                              (listen (interop/get-element-by-id "editor-input") "keyup")
-                                             (listen interop/document "cut")
-                                             (listen interop/document "copy")
-                                             (listen (interop/get-element-by-id "editor-input") "paste")
-                                             (listen interop/document "mousedown")
+
+                                             (listen interop/document "mousedown" false)
                                              (listen interop/document "mouseup")
-                                             (listen interop/document "mousemove")])]
+                                             (listen interop/document "mousemove")
+
+                                             ])]
                                 (async/go (loop []
                                             (let [evt (async/<! chans)
                                                   type (keyword (.-type evt))]
+
                                               (when (contains? #{:mousedown :mouseup :mousemove} type)
                                                 (if (= 3 (aget evt "which"))
                                                   (trigger-event :mouse-event {:mouse-type :mouse-right-down :js-evt evt})
@@ -950,9 +933,6 @@
                                                 (trigger-event :key-pressed {:key-type type
                                                                              :key      (.-key evt)}))
 
-                                              (when (contains? #{:copy :paste :cut} type)
-                                                (trigger-event :clipboard {:type   type
-                                                                           :js-evt evt}))
                                               (recur)
                                               )))))
        :reagent-render      (fn []
@@ -961,9 +941,7 @@
                                     flatten-buffer (flatten buffer)]
                                 ;(cljs.pprint/pprint @state-atom)
                                 ;(println (s/split-lines (:uffer @state-atom)))
-                                [:div {:on-click (fn [e]
-                                                   (.preventDefault e)
-                                                   (.focus (interop/get-element-by-id "editor-input")))}
+                                [:div {:on-click (fn [e] (focus! (interop/get-element-by-id "editor-input")))}
                                  [toolbar {:state state :trigger-event trigger-event}]
                                  [:div {:position "relative"}
                                   [:div {:id    "gutter"
@@ -977,35 +955,31 @@
                                                  :color            "#AAA"}}
                                    (doall (map-indexed (fn [i _]
                                                          [:span {:key   (str "row-num-" i)
-                                                                 :style {
-                                                                         ;:display     "inline-block"
-                                                                         :position    "absolute"
+                                                                 :style {:position    "absolute"
                                                                          :float       "right"
                                                                          :height      "21px"
                                                                          :font        "Monaco"
                                                                          :font-family "monospace"
                                                                          :font-size   (font-size state)
-                                                                         :top         (+ 205 (* i (line-height state)))}} (inc i)]
+                                                                         :top         (+ 205 (* i (line-height state)))}} (inc i)] ;; TODO
                                                          ) flatten-buffer))]
-                                  (let [{:keys [x y]} (get-relative-cords (interop/get-element-by-id "editor-area") (:x cursor) (:y cursor))]
-                                    [:textarea {:id          "editor-input"
-                                                :on-blur     (fn [] (.focus (interop/get-element-by-id "editor-input")))
-                                                :rows        1
-                                                :wrap        "soft"
-                                                :spell-check false
-                                                :style       {:width    "1px"
-                                                              :position "absolute"
-                                                              :height   "1px"
-                                                              :top      (str y "px")
-                                                              :left     (str x "px")
-                                                              :opacity  0
-                                                              :border   "none"
-                                                              :resize   "none"
-                                                              :outline  "none"}}])
-
+                                  [:textarea {:id          "editor-input"
+                                              :on-blur     (fn [] (focus! (interop/get-element-by-id "editor-input")))
+                                              :rows        1
+                                              :wrap        "soft"
+                                              :spell-check false
+                                              :style       {:width     "1px"
+                                                            :transform (str "translate(" (:x cursor) "px," (* (line-height state) current-row) "px)")
+                                                            :position  "absolute"
+                                                            :height    "1px"
+                                                            :overflow  "hidden"
+                                                            :opacity   0
+                                                            :border    "none"
+                                                            :resize    "none"
+                                                            :outline   "none"}}]
                                   [:div {:id         "editor-area"
                                          :tab-index  0
-                                         :on-click   (fn [] (.focus (interop/get-element-by-id "editor-input")))
+                                         :on-click   (fn [] (focus! (interop/get-element-by-id "editor-input")))
                                          :draggable  false
                                          :userselect "none"
                                          :style      {:border              "1px solid blue"
@@ -1013,7 +987,6 @@
                                                       :height              (str (* (count flatten-buffer) (line-height state)) "px")
                                                       :position            "absolute"
                                                       :margin-left         (str gutter-offset-x "px")
-
                                                       :width               (str (editor-width state) "px")
                                                       :outline             "none"
                                                       :-webkit-user-select "none"
@@ -1056,14 +1029,12 @@
                                   (doall (map-indexed (fn [i {:keys [width top left]}]
                                                         [:div {:id    (str "selection-" i)
                                                                :key   (str "selection-" i)
-                                                               :style {
-                                                                       :background "#B5D5FF"
+                                                               :style {:background "#B5D5FF"
                                                                        :position   "absolute"
                                                                        :height     (str (get-in @state-atom [:styles :line-height]) "px")
                                                                        :width      (str width "px")
                                                                        :top        (str top "px")
-                                                                       :left       (str left "px")}}]
-                                                        ) selections))]
+                                                                       :left       (str left "px")}}]) selections))]
                                  [:div {:id    "caret"
                                         :style {
                                                 :transform (str "translate(" (:x cursor) "px," (* (line-height state) current-row) "px)") ;; TODO
@@ -1081,7 +1052,6 @@
                                                   :display     "inline-block"
                                                   :white-space "nowrap"
                                                   :font-family "monospace"
-                                                  :font-size   (str (font-size state) "px")
-                                                  }
+                                                  :font-size   (str (font-size state) "px")}
                                           } "!"])
                                  ]))})))
