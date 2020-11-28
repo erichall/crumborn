@@ -40,33 +40,35 @@
 ;; [] fix double click and tripple click to select stuff
 
 
-(defonce state-atom (r/atom nil))
-(defonce states-atom (r/atom nil))
+(defonce editor-atom (r/atom nil))
 (def initial-state
-  {:buffer     "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
-   :buffers    ["a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"]
-   :selections []
-   :keys-down  #{}
-   :cursor     {:x        0                                 ;; TODO
-                :y        0
-                :x-screen 0
-                :y-screen 0
-                :max-x    nil}
-   :mouse      {:is-down false
-                :start   {:x 0 :x-screen 0 :y 0 :y-screen 0}
-                :end     {:x 0 :x-screen 0 :y 0 :y-screen 0}}
-   :editable   true
-   :char-width nil                                          ; must measure this......
-   :styles     {:line-height  21                            ; https://grtcalculator.com/
-                :font-size    12
-                :editor-width 500}
+  {:states      [{:buffer     "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
+                  :selections []
+                  :keys-down  #{}
+                  :cursor     {:x        0
+                               :y        0
+                               :x-screen 0
+                               :y-screen 0
+                               :max-x    nil}
+                  :mouse      {:is-down false
+                               :start   {:x 0 :x-screen 0 :y 0 :y-screen 0}
+                               :end     {:x 0 :x-screen 0 :y 0 :y-screen 0}}
+                  :editable   true
+                  :char-width nil                           ; must measure this......
+                  :styles     {:line-height  21             ; https://grtcalculator.com/
+                               :font-size    12
+                               :editor-width 500}}]
+   :undo-states []
    })
 
-(when-not @state-atom
-  (reset! state-atom initial-state))
+(when-not @editor-atom
+  (reset! editor-atom initial-state))
 
-(when-not @states-atom
-  (reset! states-atom [initial-state]))
+(defn get-state
+  [editor-atom]
+  (-> @editor-atom
+      :states
+      last))
 
 (defn txt->buffer
   "
@@ -541,26 +543,48 @@
                by
                (rest selections))))))
 
-(defn mutate!
-  [states-atom mutate-fn & mutate-args]
-  (let [state (last @states-atom)]
-    (if-let [new-state (apply mutate-fn (conj mutate-args state))
-             ;; TODO we can't ddo it like this
-             stuff-we-care-about [:selections :mouse :cursor :buffers :buffer]
-             comp-new-state (select-keys new-state stuff-we-care-about)
-             comp-old-state (select-keys state stuff-we-care-about)]
-      (if-not (= comp-new-state comp-old-state)
-        (swap! states-atom conj new-state)
-        state))
+(defn key-without-action?
+  [state-1 state-2]
+  (let [s1 (dissoc state-1 :keys-down)
+        s2 (dissoc state-2 :keys-down)]
+    (println "s1 _ " (:keys-down state-1) " s2 _ " (:keys-down state-2))
+    (= s1 s2)))
 
-    ;(swap! state-atom (fn [state] (if-let [new-state (apply mutate-fn (conj mutate-args state))]
-    ;                                (let [new-buffer (:buffer new-state)
-    ;                                      current-buffer (last (:buffers state))]
-    ;                                  (if-not (= new-buffer current-buffer)
-    ;                                    (update new-state :buffers conj (:buffer new-state))
-    ;                                    new-state))
-    ;                                state)))
-    ))
+(defn mutate!
+  [editor-atom pure-fn & mutate-args]
+  (let [state (get-state editor-atom)]
+    (if-let [new-state (apply pure-fn (conj mutate-args state))]
+      (when-not (= new-state state)
+        (swap! editor-atom (fn [editor]
+                             (-> (update editor :states (fn [states]
+                                                          (if (key-without-action? new-state state)
+                                                            (set-last states (update state :keys-down (fn [k] (clojure.set/union k (:keys-down new-state)))))
+                                                            (conj states new-state))
+                                                          ))
+                                 (assoc :undo-states [])))))
+      (get-state editor-atom))))
+
+(defn dropv-last
+  [v]
+  (into [] (drop-last v)))
+
+(defn undo!
+  ([editor-atom]
+   (when (> (count (:states @editor-atom)) 2)
+     (swap! editor-atom (fn [editor]
+                          (let [state (last (:states editor))]
+                            ;(cljs.pprint/pprint state)
+                            (-> (update editor :states dropv-last)
+                                (update :undo-states conj state))
+                            ))))
+   (get-state editor-atom))
+  ([editor-atom n]
+   (dotimes [_ n]
+     (undo! editor-atom))
+   (get-state editor-atom)))
+
+;; S1 -> :Meta
+;; S2 -> :Meta :z
 
 (defn find-key-command-handler
   [commands keys-down]
@@ -584,9 +608,14 @@
         state (assoc state :keys-down keys-down)
         commands [
                   #{:Meta :Shift :z}
-                  (fn [key state] (println "Redo"))
+                  (fn [key state]
+                    (println "Redo")
+                    state)
                   #{:Meta :z}
-                  (fn [key state] (println "Undo"))
+                  (fn [_ state] (let [[trigger-event] (first args)]
+                                  (trigger-event :undo {}))
+                    nil
+                    )
                   #{:Meta :c}
                   (fn [key state] (do (->> (selections->txt state)
                                            interop/write-to-clipboard!)
@@ -633,9 +662,9 @@
                   (fn [key state] (process-char (assoc state :selections []) (name (first key))))
                   ]
         handler (find-key-command-handler commands keys-down)]
-    (if handler
+    (when handler
+      (println "KEYS DOWN" keys-down)
       (handler state)
-      state
       )
     ))
 ;)
@@ -645,7 +674,8 @@
   ;; just clear it if we press meta.. https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
   (if (contains? keys-down :Meta)
     (assoc state :keys-down #{})
-    (update state :keys-down disj (keyword key))))
+    (update state :keys-down disj (keyword key)))
+  )
 
 (defn process-key
   [state {:keys [key-type] :as data} & args]
@@ -819,22 +849,22 @@
     (js/console.warn "Unable to process mouse event: " type)))
 
 (defn measure-char
-  [{:keys [buffers buffer] :as state} {:keys [char-width]}]
+  [{:keys [buffer] :as state} {:keys [char-width]}]
   (assoc state
     :char-width char-width
-    :buffers [(txt->buffer (first buffers) char-width (editor-width state))]
     :buffer (txt->buffer buffer char-width (editor-width state))))
 
 (defn handle-event!
   [name data]
   {:pre [(keyword? name)]}
   (condp = name
-    :key-pressed (mutate! states-atom process-key data handle-event!)
-    :mouse-event (mutate! states-atom handle-mouse-event data)
+    :key-pressed (mutate! editor-atom process-key data handle-event!)
+    :mouse-event (mutate! editor-atom handle-mouse-event data)
 
-    :insert-txt (mutate! states-atom insert-text-in-buffer (:txt data))
+    :insert-txt (mutate! editor-atom insert-text-in-buffer (:txt data))
+    :undo (undo! editor-atom)
 
-    :measure-char (mutate! states-atom measure-char data)
+    :measure-char (mutate! editor-atom measure-char data)
     (js/console.warn "Unable to handle event" name data)))
 
 (defn active-row
@@ -902,6 +932,16 @@
                                  :margin-left "10px"
                                  :opacity     (if (= hover :emp) 1 0.7)
                                  :font-weight "bold"}} "\uD83D\uDD17"]
+         [:div {:id             :undo
+                :on-mouse-over  (fn [] (reset! hover-atom :undo))
+                :on-mouse-leave (fn [] (reset! hover-atom nil))
+                :on-click       (fn [evt]
+                                  (.preventDefault evt)
+                                  (trigger-event :undo {}))
+                :style          {:cursor      "pointer"
+                                 :margin-left "10px"
+                                 :opacity     (if (= hover :undo) 1 0.7)
+                                 :font-weight "bold"}} "undo"]
          ]))))
 
 (defn gutter
@@ -930,16 +970,12 @@
   [el]
   (js-invoke el "focus" (js-obj "preventScroll" true)))
 
-(defn get-state
-  [states-atom]
-  (last @states-atom))
-
 (defn editor
   []
   (let [trigger-event handle-event!]
     (r/create-class
       {:component-did-mount (fn []
-                              (when-not (:char-width (get-state states-atom))
+                              (when-not (:char-width (get-state editor-atom))
                                 (trigger-event :measure-char {:char-width (-> (interop/get-element-by-id "ruler")
                                                                               interop/get-bounding-client-rect
                                                                               :width)}))
@@ -969,9 +1005,11 @@
                                               (recur)
                                               )))))
        :reagent-render      (fn []
-                              (let [{:keys [buffers selections char-width cursor keys-down] :as state} (get-state states-atom)
+                              (let [{:keys [buffer selections char-width cursor keys-down] :as state} (get-state editor-atom)
                                     current-row (y->row-index state (:y cursor))
-                                    flatten-buffer (flatten (last buffers))]
+                                    flatten-buffer (flatten buffer)]
+                                (println " NEW STATE WE GET " buffer)
+                                ;(cljs.pprint/pprint state)
                                 [:div {:on-click (fn [e] (focus! (interop/get-element-by-id "editor-input")))
                                        :style    {:position "relative"}}
                                  [toolbar {:state state :trigger-event trigger-event}]
