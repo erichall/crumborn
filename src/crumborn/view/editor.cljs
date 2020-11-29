@@ -42,22 +42,24 @@
 
 (defonce editor-atom (r/atom nil))
 (def initial-state
-  {:states      [{:buffer     "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
-                  :selections []
-                  :keys-down  #{}
-                  :cursor     {:x        0
-                               :y        0
-                               :x-screen 0
-                               :y-screen 0
-                               :max-x    nil}
-                  :mouse      {:is-down false
-                               :start   {:x 0 :x-screen 0 :y 0 :y-screen 0}
-                               :end     {:x 0 :x-screen 0 :y 0 :y-screen 0}}
-                  :editable   true
-                  :char-width nil                           ; must measure this......
-                  :styles     {:line-height  21             ; https://grtcalculator.com/
-                               :font-size    12
-                               :editor-width 500}}]
+  {:states      [{:buffer      "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
+                  :should-undo false
+                  :should-redo false
+                  :selections  []
+                  :keys-down   #{}
+                  :cursor      {:x        0
+                                :y        0
+                                :x-screen 0
+                                :y-screen 0
+                                :max-x    nil}
+                  :mouse       {:is-down false
+                                :start   {:x 0 :x-screen 0 :y 0 :y-screen 0}
+                                :end     {:x 0 :x-screen 0 :y 0 :y-screen 0}}
+                  :editable    true
+                  :char-width  nil                          ; must measure this......
+                  :styles      {:line-height  21            ; https://grtcalculator.com/
+                                :font-size    12
+                                :editor-width 500}}]
    :undo-states []
    })
 
@@ -491,7 +493,7 @@
           (as-> state (assoc-in state [:buffer] (drop-nth (:buffer state) by))) ;; I think these are a bit awkward, changing state at the same time needed stuff from the changed state
           (set-cursor (* char-width (count row-above)) (- (:y cursor) (:line-height styles)))))
       :else
-      (let [removed-row (remove-char-at row (/ (:x cursor) char-width char-width))
+      (let [removed-row (remove-char-at row (/ (- (:x cursor) char-width) char-width))
             row-group (->> (if (empty? removed-row) " " removed-row) ;; " " so row doesn't collapse when deleting the last char
                            (assoc buffer-row bx)
                            (partition-buffer-row max-chars))]
@@ -547,41 +549,74 @@
   [state-1 state-2]
   (let [s1 (dissoc state-1 :keys-down)
         s2 (dissoc state-2 :keys-down)]
-    (println "s1 _ " (:keys-down state-1) " s2 _ " (:keys-down state-2))
     (= s1 s2)))
 
-(defn mutate!
-  [editor-atom pure-fn & mutate-args]
-  (let [state (get-state editor-atom)]
-    (if-let [new-state (apply pure-fn (conj mutate-args state))]
-      (when-not (= new-state state)
-        (swap! editor-atom (fn [editor]
-                             (-> (update editor :states (fn [states]
-                                                          (if (key-without-action? new-state state)
-                                                            (set-last states (update state :keys-down (fn [k] (clojure.set/union k (:keys-down new-state)))))
-                                                            (conj states new-state))
-                                                          ))
-                                 (assoc :undo-states [])))))
-      (get-state editor-atom))))
+
 
 (defn dropv-last
   [v]
   (into [] (drop-last v)))
 
-(defn undo!
-  ([editor-atom]
-   (when (> (count (:states @editor-atom)) 2)
-     (swap! editor-atom (fn [editor]
-                          (let [state (last (:states editor))]
-                            ;(cljs.pprint/pprint state)
-                            (-> (update editor :states dropv-last)
-                                (update :undo-states conj state))
-                            ))))
-   (get-state editor-atom))
-  ([editor-atom n]
-   (dotimes [_ n]
-     (undo! editor-atom))
-   (get-state editor-atom)))
+(defn prev-states
+  "Remove the states that are the same regarding the following keys and returns a new state list where the
+  last state is different from the given last state.
+    - buffer
+    - selections
+    - cursor
+    "
+  [states]
+  (let [keys-of-interest [:buffer :selections :cursor]
+        current-state (-> (last states)
+                          (select-keys keys-of-interest))
+        states-wlast (->> (drop-last states)
+                          reverse)]
+    (->> (take-while (fn [state] (= (select-keys state keys-of-interest) current-state)) states-wlast)
+         count
+         inc                                                ;; inc to include the current state
+         (#(do (println "Removing the last..." % " states") %))
+         (#(drop-last % states))
+         (into []))))
+
+(defn undo
+  [{:keys [states] :as editor}]
+  (if (> (count states) 2)
+    (let [state (last states)
+          new-states (prev-states states)]
+      (-> (assoc editor :states new-states)
+          (update :undo-states conj (assoc state :should-undo false))))
+    editor))
+
+(defn redo
+  [{:keys [undo-states] :as editor}]
+  (println "redo..." undo-states)
+  (if-not (empty? undo-states)
+    (let [new-state (last undo-states)]
+      (println "The new last state" new-state)
+      (-> (update-in editor [:states] conj new-state)
+          (update-in editor [:undo-states] dropv-last)
+          )
+      )
+    editor
+    )
+  )
+
+(defn mutate!
+  [editor-atom pure-fn & mutate-args]
+  (swap! editor-atom (fn [editor]
+                       (let [{:keys [should-undo should-redo] :as new-state} (apply pure-fn (conj mutate-args (last (:states editor))))]
+                         (if (some? new-state)
+                           (do
+                             (cond
+                               should-undo (undo editor)
+                               should-redo (redo editor)
+                               :else
+                               (do
+                                 (println "We mutate..." pure-fn mutate-args)
+                                 (-> (update editor :states (fn [states] (conj states new-state)))
+                                     (assoc :undo-states [])))))
+                           editor)
+                         )))
+  (get-state editor-atom))
 
 ;; S1 -> :Meta
 ;; S2 -> :Meta :z
@@ -602,20 +637,42 @@
           (partial handler is-handler?)
           (recur (rest commands)))))))
 
+(defn meta-key-down? [js-evt] (.-metaKey js-evt))
+(defn alt-key-down? [js-evt] (.-altKey js-evt))
+(defn ctrl-key-down? [js-evt] (.-ctrlKey js-evt))
+(defn shift-key-down? [js-evt] (.-shiftKey js-evt))
+(defn shift-meta-keys-down? [js-evt] (and (meta-key-down? js-evt)
+                                          (shift-key-down? js-evt)))
+(defn handle-super-keys
+  [js-evt key]
+  (cond
+    (shift-meta-keys-down? js-evt) #{:Shift :Meta key}
+    (meta-key-down? js-evt) #{:Meta key}
+    (alt-key-down? js-evt) #{:Alt key}
+    (ctrl-key-down? js-evt) #{:Control key}
+    (shift-key-down? js-evt) #{:Shift key}
+    :else #{key}))
+
+(defn dissoc-keys-down
+  [state keys-down]
+  (update state :keys-down (fn [k] (apply (partial disj k) (into [] keys-down)))))
+
 (defn process-key-down
-  [state {:keys [key] :as data} & args]
-  (let [keys-down (conj (:keys-down state) (keyword key))
+  [state {:keys [key js-evt] :as data} & args]
+  {:post [(not (nil? (:keys-down %)))]}
+  (let [keys-down (->> (keyword key)
+                       (handle-super-keys js-evt)
+                       (clojure.set/union (:keys-down state)))
         state (assoc state :keys-down keys-down)
         commands [
                   #{:Meta :Shift :z}
                   (fn [key state]
-                    (println "Redo")
-                    state)
+                    (-> (dissoc-keys-down state key)
+                        (assoc :should-redo true)))
                   #{:Meta :z}
-                  (fn [_ state] (let [[trigger-event] (first args)]
-                                  (trigger-event :undo {}))
-                    nil
-                    )
+                  (fn [key state]
+                    (-> (dissoc-keys-down state key)
+                        (assoc :should-undo true)))
                   #{:Meta :c}
                   (fn [key state] (do (->> (selections->txt state)
                                            interop/write-to-clipboard!)
@@ -634,9 +691,10 @@
                                           (assoc :selections [])))))
                   #{:Enter}
                   (fn [key state] (-> (assoc state :selections [])
-                                      process-enter))
+                                      process-enter
+                                      (dissoc-keys-down key)))
                   [#{:Shift} #{:Meta} #{:Alt} #{:Control}]
-                  (fn [key state] state)
+                  (fn [key state] (dissoc-keys-down state key))
                   #{:Tab}
                   (fn [key state] (process-char (assoc state :selections []) "\t")) ;; TODO inc cursor with 4
                   #{:ArrowRight}
@@ -659,11 +717,13 @@
                                     process-backspace))
                   ;; all chars http://www.asciitable.com/ only ascii chars, that will be a problem
                   (mapv (fn [a] #{(keyword (char a))}) (range 32 127))
-                  (fn [key state] (process-char (assoc state :selections []) (name (first key))))
+                  (fn [key state]
+                    (-> (process-char (assoc state :selections []) (name (first key)))
+                        (dissoc-keys-down key))
+                    )
                   ]
         handler (find-key-command-handler commands keys-down)]
     (when handler
-      (println "KEYS DOWN" keys-down)
       (handler state)
       )
     ))
@@ -672,13 +732,17 @@
 (defn process-key-up
   [{:keys [keys-down] :as state} {:keys [key]}]
   ;; just clear it if we press meta.. https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
-  (if (contains? keys-down :Meta)
-    (assoc state :keys-down #{})
-    (update state :keys-down disj (keyword key)))
+  ;(if (contains? keys-down :Meta)
+  ;(assoc state :keys-down #{})
+
+  (update state :keys-down disj (keyword key))
+
+  ;)
   )
 
 (defn process-key
   [state {:keys [key-type] :as data} & args]
+  (println "Process-key... " key-type (:key data))
   (condp = key-type
     :keydown (process-key-down state data args)
     :keyup (process-key-up state data)
@@ -862,7 +926,7 @@
     :mouse-event (mutate! editor-atom handle-mouse-event data)
 
     :insert-txt (mutate! editor-atom insert-text-in-buffer (:txt data))
-    :undo (undo! editor-atom)
+    ;:undo (undo editor-atom)
 
     :measure-char (mutate! editor-atom measure-char data)
     (js/console.warn "Unable to handle event" name data)))
@@ -982,7 +1046,7 @@
                               (let [chans (async/merge
                                             [
                                              (listen (interop/get-element-by-id "editor-input") "keydown" false)
-                                             (listen (interop/get-element-by-id "editor-input") "keyup")
+                                             ;(listen (interop/get-element-by-id "editor-input") "keyup")
 
                                              (listen interop/document "mousedown" false)
                                              (listen interop/document "mouseup")
@@ -1000,6 +1064,7 @@
 
                                               (when (contains? #{:keydown :keyup} type)
                                                 (trigger-event :key-pressed {:key-type type
+                                                                             :js-evt   evt
                                                                              :key      (.-key evt)}))
 
                                               (recur)
@@ -1008,8 +1073,6 @@
                               (let [{:keys [buffer selections char-width cursor keys-down] :as state} (get-state editor-atom)
                                     current-row (y->row-index state (:y cursor))
                                     flatten-buffer (flatten buffer)]
-                                (println " NEW STATE WE GET " buffer)
-                                ;(cljs.pprint/pprint state)
                                 [:div {:on-click (fn [e] (focus! (interop/get-element-by-id "editor-input")))
                                        :style    {:position "relative"}}
                                  [toolbar {:state state :trigger-event trigger-event}]
