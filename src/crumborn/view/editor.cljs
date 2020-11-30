@@ -45,8 +45,8 @@
   {:states      [{:buffer      "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
                   :should-undo false
                   :should-redo false
+                  :key-delay   30
                   :selections  []
-                  :keys-down   #{}
                   :cursor      {:x        0
                                 :y        0
                                 :x-screen 0
@@ -545,13 +545,6 @@
                by
                (rest selections))))))
 
-(defn key-without-action?
-  [state-1 state-2]
-  (let [s1 (dissoc state-1 :keys-down)
-        s2 (dissoc state-2 :keys-down)]
-    (= s1 s2)))
-
-
 
 (defn dropv-last
   [v]
@@ -611,7 +604,7 @@
                                should-redo (redo editor)
                                :else
                                (do
-                                 (println "We mutate..." pure-fn mutate-args)
+                                 ;(println "We mutate..." pure-fn)
                                  (-> (update editor :states (fn [states] (conj states new-state)))
                                      (assoc :undo-states [])))))
                            editor)
@@ -634,7 +627,7 @@
                               keys
                               (recur (into #{} (rest keys))))))]
         (if is-handler?
-          (partial handler is-handler?)
+          handler
           (recur (rest commands)))))))
 
 (defn meta-key-down? [js-evt] (.-metaKey js-evt))
@@ -653,100 +646,70 @@
     (shift-key-down? js-evt) #{:Shift key}
     :else #{key}))
 
-(defn dissoc-keys-down
-  [state keys-down]
-  (update state :keys-down (fn [k] (apply (partial disj k) (into [] keys-down)))))
+(def commands
+  [#{:Meta :Shift :z}
+   (fn [{:keys [state]}] (assoc state :should-redo true))
+   #{:Meta :z}
+   (fn [{:keys [state]}] (assoc state :should-undo true))
+   #{:Meta :c}
+   (fn [{:keys [state]}] (do (->> (selections->txt state)
+                                  interop/write-to-clipboard!)
+                             state))
+   #{:Meta :v}
+   (fn [{:keys [state trigger-event]}]
+     (do
+       ;; this is async, can we do something better here?
+       (interop/read-clipboard-txt (fn [data]
+                                     (trigger-event :insert-txt {:txt data})))
+       state))
+   #{:Meta :x}
+   (fn [{:keys [state]}] (let [{:keys [removed-txt buffer]} (remove-text-in-buffer state)]
+                           (do
+                             (interop/write-to-clipboard! removed-txt)
+                             (-> (assoc state :buffer buffer)
+                                 (assoc :selections [])))))
+   #{:Enter}
+   (fn [{:keys [state]}] (-> (assoc state :selections [])
+                             process-enter))
+   ;[#{:Shift} #{:Meta} #{:Alt} #{:Control}]
+   ;(fn [key state] (dissoc-keys-down state key))
+   #{:Tab}
+   (fn [{:keys [state]}] (process-char (assoc state :selections []) "\t")) ;; TODO inc cursor with 4
+   #{:ArrowRight}
+   (fn [{:keys [state]}] (-> (assoc state :selections [])
+                             inc-cursor-x
+                             (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x)))))
+   #{:ArrowLeft}
+   (fn [{:keys [state]}] (-> (assoc state :selections [])
+                             dec-cursor-x
+                             (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x)))))
+   #{:ArrowUp}
+   (fn [{:keys [state]}] (-> (assoc state :selections [])
+                             dec-cursor-y))
+   #{:ArrowDown}
+   (fn [{:keys [state]}] (-> (assoc state :selections [])
+                             inc-cursor-y))
+   [#{:Backspace} #{:Shift :Backspace}]
+   (fn [{:keys [state]}] (->                                ;; TODO handle selections here also...
+                           (assoc state :selections [])
+                           process-backspace))
+   ;; all chars http://www.asciitable.com/ only ascii chars, that will be a problem
+   (mapv (fn [a] #{(keyword (char a))}) (range 32 127))
+   (fn [{:keys [keys-down state] :as a}]
+     (process-char (assoc state :selections []) (name (first keys-down))))
+
+   (mapv (fn [a] #{:Shift (keyword (char a))}) (range 32 127))
+   (fn [{:keys [keys-down state]}]
+     (process-char (assoc state :selections []) (name (first keys-down))))
+   ])
 
 (defn process-key-down
-  [state {:keys [key js-evt] :as data} & args]
-  {:post [(not (nil? (:keys-down %)))]}
-  (let [keys-down (->> (keyword key)
-                       (handle-super-keys js-evt)
-                       (clojure.set/union (:keys-down state)))
-        state (assoc state :keys-down keys-down)
-        commands [
-                  #{:Meta :Shift :z}
-                  (fn [key state]
-                    (-> (dissoc-keys-down state key)
-                        (assoc :should-redo true)))
-                  #{:Meta :z}
-                  (fn [key state]
-                    (-> (dissoc-keys-down state key)
-                        (assoc :should-undo true)))
-                  #{:Meta :c}
-                  (fn [key state] (do (->> (selections->txt state)
-                                           interop/write-to-clipboard!)
-                                      state))
-                  #{:Meta :v}
-                  (fn [_ state] (do
-                                  (let [[trigger-event] (first args)]
-                                    (interop/read-clipboard-txt (fn [data]
-                                                                  (trigger-event :insert-txt {:txt data}))))
-                                  state))
-                  #{:Meta :x}
-                  (fn [key state] (let [{:keys [removed-txt buffer]} (remove-text-in-buffer state)]
-                                    (do
-                                      (interop/write-to-clipboard! removed-txt)
-                                      (-> (assoc state :buffer buffer)
-                                          (assoc :selections [])))))
-                  #{:Enter}
-                  (fn [key state] (-> (assoc state :selections [])
-                                      process-enter
-                                      (dissoc-keys-down key)))
-                  [#{:Shift} #{:Meta} #{:Alt} #{:Control}]
-                  (fn [key state] (dissoc-keys-down state key))
-                  #{:Tab}
-                  (fn [key state] (process-char (assoc state :selections []) "\t")) ;; TODO inc cursor with 4
-                  #{:ArrowRight}
-                  (fn [key state] (-> (assoc state :selections [])
-                                      inc-cursor-x
-                                      (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x)))))
-                  #{:ArrowLeft}
-                  (fn [key state] (-> (assoc state :selections [])
-                                      dec-cursor-x
-                                      (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x)))))
-                  #{:ArrowUp}
-                  (fn [key state] (-> (assoc state :selections [])
-                                      dec-cursor-y))
-                  #{:ArrowDown}
-                  (fn [key state] (-> (assoc state :selections [])
-                                      inc-cursor-y))
-                  #{:Backspace}
-                  (fn [key state] (->                       ;; TODO handle selections here also...
-                                    (assoc state :selections [])
-                                    process-backspace))
-                  ;; all chars http://www.asciitable.com/ only ascii chars, that will be a problem
-                  (mapv (fn [a] #{(keyword (char a))}) (range 32 127))
-                  (fn [key state]
-                    (-> (process-char (assoc state :selections []) (name (first key)))
-                        (dissoc-keys-down key))
-                    )
-                  ]
-        handler (find-key-command-handler commands keys-down)]
+  [state {:keys [keys-down trigger-event]}]
+  (let [handler (find-key-command-handler commands keys-down)]
     (when handler
-      (handler state)
-      )
-    ))
-;)
-
-(defn process-key-up
-  [{:keys [keys-down] :as state} {:keys [key]}]
-  ;; just clear it if we press meta.. https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
-  ;(if (contains? keys-down :Meta)
-  ;(assoc state :keys-down #{})
-
-  (update state :keys-down disj (keyword key))
-
-  ;)
-  )
-
-(defn process-key
-  [state {:keys [key-type] :as data} & args]
-  (println "Process-key... " key-type (:key data))
-  (condp = key-type
-    :keydown (process-key-down state data args)
-    :keyup (process-key-up state data)
-    (js/console.warn "unable to process key event" key-type)))
+      (handler {:state         state
+                :keys-down     keys-down
+                :trigger-event trigger-event}))))
 
 (defn get-dom-el
   [id]
@@ -922,11 +885,12 @@
   [name data]
   {:pre [(keyword? name)]}
   (condp = name
-    :key-pressed (mutate! editor-atom process-key data handle-event!)
+    :key-batch (doseq [k (:batch data)]
+                 (mutate! editor-atom process-key-down {:keys-down     k
+                                                        :trigger-event handle-event!}))
     :mouse-event (mutate! editor-atom handle-mouse-event data)
 
     :insert-txt (mutate! editor-atom insert-text-in-buffer (:txt data))
-    ;:undo (undo editor-atom)
 
     :measure-char (mutate! editor-atom measure-char data)
     (js/console.warn "Unable to handle event" name data)))
@@ -1034,6 +998,34 @@
   [el]
   (js-invoke el "focus" (js-obj "preventScroll" true)))
 
+(defn read-all
+  [chan]
+  (async/go
+    (loop [values []]
+      (let [[v _] (async/alts! [chan] :default :done)]
+        (if (= v :done)
+          values
+          (recur (conj values v)))))))
+
+(defn batch-commands
+  [in-chan out-chan max-time]
+  (async/go
+    (loop [buffer []
+           t (async/timeout max-time)]
+      (let [[v p] (async/alts! [in-chan t])]
+        (cond
+          (and (nil? v) (empty? buffer))                    ;; wait for input
+          (let [d (async/<! in-chan)]
+            (recur (conj buffer d) t))
+
+          (= p t)                                           ;; timeout
+          (do
+            (async/>! out-chan buffer)
+            (recur [] (async/timeout max-time)))
+
+          :else
+          (recur (conj buffer v) t))))))
+
 (defn editor
   []
   (let [trigger-event handle-event!]
@@ -1046,13 +1038,17 @@
                               (let [chans (async/merge
                                             [
                                              (listen (interop/get-element-by-id "editor-input") "keydown" false)
-                                             ;(listen (interop/get-element-by-id "editor-input") "keyup")
-
                                              (listen interop/document "mousedown" false)
                                              (listen interop/document "mouseup")
                                              (listen interop/document "mousemove")
-
-                                             ])]
+                                             ])
+                                    command-in (async/chan)
+                                    command-out (async/chan)]
+                                (batch-commands command-in command-out (:key-delay @editor-atom))
+                                (async/go (loop []
+                                            (let [d (async/<! command-out)]
+                                              (trigger-event :key-batch {:batch d})
+                                              (recur))))
                                 (async/go (loop []
                                             (let [evt (async/<! chans)
                                                   type (keyword (.-type evt))]
@@ -1063,9 +1059,7 @@
                                                   (trigger-event :mouse-event {:mouse-type type :js-evt evt})))
 
                                               (when (contains? #{:keydown :keyup} type)
-                                                (trigger-event :key-pressed {:key-type type
-                                                                             :js-evt   evt
-                                                                             :key      (.-key evt)}))
+                                                (async/>! command-in (handle-super-keys evt (keyword (.-key evt)))))
 
                                               (recur)
                                               )))))
