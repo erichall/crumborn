@@ -35,17 +35,16 @@
 ;; [X] add scrolling when cursor moves
 ;; [] fix bug when copy empty rows, the \n seems to no follow
 ;; [] fix when cut whole row, the row should not collapse
-;; [] fix undo
+;; [X] fix undo
 ;; [] fix delete selections on backspace
 ;; [] fix double click and tripple click to select stuff
-
 
 (defonce editor-atom (r/atom nil))
 (def initial-state
   {:states      [{:buffer      "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
                   :should-undo false
                   :should-redo false
-                  :key-delay   30
+                  :key-delay   80
                   :selections  []
                   :cursor      {:x        0
                                 :y        0
@@ -566,7 +565,7 @@
     (->> (take-while (fn [state] (= (select-keys state keys-of-interest) current-state)) states-wlast)
          count
          inc                                                ;; inc to include the current state
-         (#(do (println "Removing the last..." % " states") %))
+         ;(#(do (println "Removing the last..." % " states") %))
          (#(drop-last % states))
          (into []))))
 
@@ -581,17 +580,11 @@
 
 (defn redo
   [{:keys [undo-states] :as editor}]
-  (println "redo..." undo-states)
   (if-not (empty? undo-states)
     (let [new-state (last undo-states)]
-      (println "The new last state" new-state)
       (-> (update-in editor [:states] conj new-state)
-          (update-in editor [:undo-states] dropv-last)
-          )
-      )
-    editor
-    )
-  )
+          (update-in [:undo-states] dropv-last)))
+    editor))
 
 (defn mutate!
   [editor-atom pure-fn & mutate-args]
@@ -604,15 +597,11 @@
                                should-redo (redo editor)
                                :else
                                (do
-                                 ;(println "We mutate..." pure-fn)
                                  (-> (update editor :states (fn [states] (conj states new-state)))
                                      (assoc :undo-states [])))))
                            editor)
                          )))
   (get-state editor-atom))
-
-;; S1 -> :Meta
-;; S2 -> :Meta :z
 
 (defn find-key-command-handler
   [commands keys-down]
@@ -624,11 +613,12 @@
                           (if (empty? keys)
                             false
                             (if (some (fn [c] (= c keys)) combo)
-                              keys
+                              true
                               (recur (into #{} (rest keys))))))]
         (if is-handler?
           handler
           (recur (rest commands)))))))
+
 
 (defn meta-key-down? [js-evt] (.-metaKey js-evt))
 (defn alt-key-down? [js-evt] (.-altKey js-evt))
@@ -695,12 +685,18 @@
                            process-backspace))
    ;; all chars http://www.asciitable.com/ only ascii chars, that will be a problem
    (mapv (fn [a] #{(keyword (char a))}) (range 32 127))
-   (fn [{:keys [keys-down state] :as a}]
-     (process-char (assoc state :selections []) (name (first keys-down))))
+   (fn [{:keys [keys-down state]}]
+     (let [key (cond
+                 (clojure.set/intersection #{:Control :Meta} keys-down)
+                 (remove #{:Control :Meta} keys-down)
+                 :else
+                 keys-down
+                 )]
+       (process-char (assoc state :selections []) (name (first key)))))
 
    (mapv (fn [a] #{:Shift (keyword (char a))}) (range 32 127))
    (fn [{:keys [keys-down state]}]
-     (process-char (assoc state :selections []) (name (first keys-down))))
+     (process-char (assoc state :selections []) (name (first (remove #{:Shift} keys-down)))))
    ])
 
 (defn process-key-down
@@ -1044,7 +1040,7 @@
                                              ])
                                     command-in (async/chan)
                                     command-out (async/chan)]
-                                (batch-commands command-in command-out (:key-delay @editor-atom))
+                                (batch-commands command-in command-out (:key-delay (get-state editor-atom)))
                                 (async/go (loop []
                                             (let [d (async/<! command-out)]
                                               (trigger-event :key-batch {:batch d})
