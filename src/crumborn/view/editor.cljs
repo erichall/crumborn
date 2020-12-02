@@ -33,18 +33,20 @@
 ;; [] Think of something better to separate cursor movement from the rest of the jazz, and especially something
 ;;    that does not involve coordinates and offsetting with a dam gutter......
 ;; [X] add scrolling when cursor moves
-;; [] fix bug when copy empty rows, the \n seems to no follow
-;; [] fix when cut whole row, the row should not collapse
+;; [X] fix bug when copy empty rows, the \n seems to no follow
+;; [X] fix when cut whole row, the row should not collapse
 ;; [X] fix undo
-;; [] fix delete selections on backspace
-;; [] fix double click and tripple click to select stuff
+;; [X] fix delete selections on backspace
+;; [X] fix double click and triple click to select stuff
+;; [] fix multimethod of all cursor moving stuff?
+;; [] fix cursor movement when cut, should end up on last on that row i guess
 
 (defonce editor-atom (r/atom nil))
 (def initial-state
   {:states      [{:buffer      "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
                   :should-undo false
                   :should-redo false
-                  :key-delay   80
+                  :key-delay   50
                   :selections  []
                   :cursor      {:x        0
                                 :y        0
@@ -161,11 +163,13 @@
     (min (dec (count flat-buffer)) yy)))
 
 (defn get-row
-  [{:keys [buffer]} row-number]
-  (let [rows (flatten buffer)]
-    (if (< row-number (count rows))
-      (nth rows row-number)
-      (last rows))))
+  ([{:keys [buffer]} row-number]
+   (let [rows (flatten buffer)]
+     (if (< row-number (count rows))
+       (nth rows row-number)
+       (last rows))))
+  ([state by bx]
+   (get-in state [:buffer by bx])))
 
 (defn chars-in-row->px
   [row char-width]
@@ -261,6 +265,10 @@
   (let [row (y->row state (:y cursor))]
     (update-in state [:cursor :x] (fn [x]
                                     (max 0 (clamp-to-chars state row (- x char-width)))))))
+(defn last-row
+  [{:keys [buffer]}]
+  (-> (flatten buffer)
+      last))
 
 (defn set-cursor
   [state x y]
@@ -278,14 +286,27 @@
         row (get-in buffer [by bx])]
     (set-cursor state (* char-width (count row)) (:y cursor))))
 
-(defn x->char-pos
-  [{:keys [char-width cursor]}]
-  (/ (:x cursor) char-width))
+(defn x-row->px
+  [{:keys [char-width]} row]
+  (* (count row) char-width))
+
+(defn y-row->px
+  [state row-num]
+  (* row-num (line-height state)))
 
 (defn number-of-lines
   [{:keys [buffer]}]
   (-> (flatten buffer)
       count))
+
+(defn set-cursor-end-of-buffer
+  [{:keys [char-width] :as state}]
+  (let [last-row (last-row state)]
+    (set-cursor state (x-row->px state last-row) (y-row->px state (number-of-lines state)))))
+
+(defn x->char-pos
+  [{:keys [char-width cursor]}]
+  (/ (:x cursor) char-width))
 
 (defn row-above
   "Get the row above, if on first row, return the first row"
@@ -372,33 +393,65 @@
   [s start end]
   (str (subs s 0 start) (subs s end (count s))))
 
+(defn find-selection
+  [selections i j]
+  (-> (filter (fn [{:keys [buffer-cord]}]
+                (and (= (first buffer-cord) i)
+                     (= (second buffer-cord) j))) selections)
+      first
+      :buffer-cord))
+
+(defn is-start-of-selection?
+  [selections i j]
+  (let [{:keys [buffer-cord]} (first selections)
+        [by bx] buffer-cord]
+    (and (= by i) (= bx j))))
+
+(defn remove-selected-str-from-row
+  [selections row buffer-row-index]
+  (reduce (fn [[removed-str row j] r]
+            (if-let [[_ _ start end] (find-selection selections buffer-row-index j)]
+              (let [removed-s (remove-range r start end)
+                    was-removed (subs r start end)
+                    start? (is-start-of-selection? selections buffer-row-index j)]
+                (if (empty? removed-s)
+                  [(str removed-str was-removed) (if start? (conj row "")) (inc j)]
+                  [(str removed-str was-removed) (conj row removed-s) (inc j)]))
+              [removed-str (conj row r) (inc j)])) ["" [] 0] row))
+
+(defn one-row-selected?
+  [selections]
+  (= (count selections) 1))
+
+(defn cursor->buffer-cord
+  "Finds a word under cursor and returns [word, by, bx, start, end]"
+  [{:keys [buffer cursor] :as state}]
+  (let [[by bx] (->> (y->row-index state (:y cursor))
+                     (y->buffer-cord buffer))
+        pos (x->char-pos state)]
+    (loop [words (-> (get-row state by bx)
+                     (s/split #" ")
+                     (as-> r (interpose " " r)))
+           w-start 0]
+      (if (empty? words)
+        nil
+        (let [word (first words)
+              w-end (+ (count word) w-start)]
+          (if (and (>= pos w-start) (<= pos w-end))
+            [word by bx w-start w-end]
+            (recur (rest words) w-end)))))))
+
 (defn remove-text-in-buffer
   "maybe we could do better than this mess......"
   [{:keys [buffer selections]}]
-  (let [find-selection (fn [i j]
-                         (-> (filter (fn [{:keys [buffer-cord]}]
-                                       (and (= (first buffer-cord) i)
-                                            (= (second buffer-cord) j))) selections)
-                             first
-                             :buffer-cord))
-        [_ removed-txt new-buffer] (->> (reduce (fn [[i removed-stuff acc] row]
-                                                  (let [[removed-str new-row _] (reduce (fn [[removed-str row j] r]
-                                                                                          (if-let [[_ _ start end] (find-selection i j)]
-                                                                                            (let [removed-s (remove-range r start end)
-                                                                                                  was-removed (subs r start end)]
-                                                                                              (if (empty? removed-s)
-                                                                                                [(str removed-str was-removed) row (inc j)]
-                                                                                                [(str removed-str was-removed) (conj row removed-s) (inc j)]))
-                                                                                            [removed-str (conj row r) (inc j)])) ["" [] 0] row)]
+  (let [[_ removed-txt new-buffer] (->> (reduce (fn [[i removed-stuff acc] row]
+                                                  (let [[removed-str new-row _] (remove-selected-str-from-row selections row i)]
                                                     [(inc i)
-                                                     (if (not= "" removed-str)
-                                                       (conj removed-stuff removed-str)
-                                                       removed-stuff)
+                                                     (conj removed-stuff removed-str)
                                                      (if (empty? new-row)
-                                                       acc
-                                                       (conj acc new-row))
-                                                     ])) [0 [] []] buffer))]
-    {:removed-txt (s/join "\n" removed-txt)
+                                                       (if (one-row-selected? selections) (conj acc [""]) acc)
+                                                       (conj acc new-row))])) [0 [] []] buffer))]
+    {:removed-txt (s/trim (s/join "\n" removed-txt))
      :buffer      new-buffer}))
 
 (defn insert-text-in-buffer
@@ -431,9 +484,25 @@
             (insert-row-at % (inc by) more-to-insert))
           %)))))
 
+(defn has-selections?
+  [selections]
+  (> (count selections) 0))
+
+(defn remove-selection
+  [{:keys [selections] :as state}]
+  (let [{:keys [buffer]} (remove-text-in-buffer state)
+        {:keys [top left]} (first selections)]
+    (-> (assoc-in state [:buffer] buffer)
+        (assoc :selections [])
+        (set-cursor left top))))
+
+
 (defn process-char
-  [{:keys [cursor buffer] :as state} key]
-  (let [[by bx] (->>
+  [state key]
+  (let [{:keys [cursor buffer] :as state} (if (has-selections? (:selections state))
+                                            (remove-selection state)
+                                            state)
+        [by bx] (->>
                   (y->row-index state (:y cursor))
                   (y->buffer-cord buffer))
         row (get-in buffer [by bx])
@@ -441,15 +510,14 @@
         line-group (->> (x->char-pos state)
                         (str-insert row key)
                         (assoc (get-in state [:buffer by]) bx)
-                        (partition-buffer-row max-chars))
-        s (-> (assoc-in state [:buffer by] line-group)
-              (#(if (cursor-end-of-row? %)
-                  (-> (inc-cursor-y %)
-                      set-cursor-start)
-                  %))
-              inc-cursor-x)]
-    s
-    ))
+                        (partition-buffer-row max-chars))]
+    (-> (assoc-in state [:buffer by] line-group)
+        (#(if (cursor-end-of-row? %)
+            (-> (inc-cursor-y %)
+                set-cursor-start)
+            %))
+        inc-cursor-x)))
+
 
 (defn process-backspace
   "Some cases:
@@ -460,13 +528,15 @@
 
   for all of these, we need to shift the full buffer row to account for page width
   "
-  [{:keys [cursor buffer char-width styles] :as state}]
+  [{:keys [cursor buffer char-width styles selections] :as state}]
   (let [row-index (y->row-index state (:y cursor))
         [by bx] (y->buffer-cord buffer row-index)
         row (get-in buffer [by bx])
         max-chars (line-max-chars state)
         buffer-row (get-in state [:buffer by])]
     (cond
+      (has-selections? selections)
+      (remove-selection state)
       ;; we are inside the same row-group
       (and (cursor-first-of-row? state) (> bx 0))
       (let [del-row (-> (get-in state [:buffer by (dec bx)])
@@ -488,9 +558,12 @@
                                   (into [])
                                   (partition-buffer-row max-chars))]
         (->
-          (assoc-in state [:buffer (dec by)] new-row-group-above)
+          (assoc-in state [:buffer (dec by)] (if (empty? new-row-group-above)
+                                               [""]
+                                               new-row-group-above))
           (as-> state (assoc-in state [:buffer] (drop-nth (:buffer state) by))) ;; I think these are a bit awkward, changing state at the same time needed stuff from the changed state
-          (set-cursor (* char-width (count row-above)) (- (:y cursor) (:line-height styles)))))
+          (set-cursor (* char-width (count row-above)) (- (:y cursor) (:line-height styles))))
+        )
       :else
       (let [removed-row (remove-char-at row (/ (- (:x cursor) char-width) char-width))
             row-group (->> (if (empty? removed-row) " " removed-row) ;; " " so row doesn't collapse when deleting the last char
@@ -514,8 +587,11 @@
    remember, the position of enter char must include that char since it visually it looks
    like the cursor is just behind that char
   "
-  [{:keys [cursor buffer char-width] :as state}]
-  (let [row-index (y->row-index state (:y cursor))
+  [state]
+  (let [{:keys [cursor buffer char-width] :as state} (if (has-selections? (:selections state))
+                                                       (remove-selection state)
+                                                       state)
+        row-index (y->row-index state (:y cursor))
         [by bx] (y->buffer-cord buffer row-index)
         row (get-in state [:buffer by bx])
         buffer-row (get-in state [:buffer by])
@@ -528,7 +604,6 @@
       (insert-row-at (inc by) [(into [] (cons second rest-buffer-row))])
       inc-cursor-y
       set-cursor-start)))
-
 
 (defn selections->txt
   [{:keys [selections] :as state}]
@@ -659,8 +734,7 @@
                              (-> (assoc state :buffer buffer)
                                  (assoc :selections [])))))
    #{:Enter}
-   (fn [{:keys [state]}] (-> (assoc state :selections [])
-                             process-enter))
+   (fn [{:keys [state]}] (process-enter state))
    ;[#{:Shift} #{:Meta} #{:Alt} #{:Control}]
    ;(fn [key state] (dissoc-keys-down state key))
    #{:Tab}
@@ -680,9 +754,7 @@
    (fn [{:keys [state]}] (-> (assoc state :selections [])
                              inc-cursor-y))
    [#{:Backspace} #{:Shift :Backspace}]
-   (fn [{:keys [state]}] (->                                ;; TODO handle selections here also...
-                           (assoc state :selections [])
-                           process-backspace))
+   (fn [{:keys [state]}] (process-backspace state))
    ;; all chars http://www.asciitable.com/ only ascii chars, that will be a problem
    (mapv (fn [a] #{(keyword (char a))}) (range 32 127))
    (fn [{:keys [keys-down state]}]
@@ -690,13 +762,12 @@
                  (clojure.set/intersection #{:Control :Meta} keys-down)
                  (remove #{:Control :Meta} keys-down)
                  :else
-                 keys-down
-                 )]
-       (process-char (assoc state :selections []) (name (first key)))))
+                 keys-down)]
+       (process-char state (name (first key)))))
 
    (mapv (fn [a] #{:Shift (keyword (char a))}) (range 32 127))
    (fn [{:keys [keys-down state]}]
-     (process-char (assoc state :selections []) (name (first (remove #{:Shift} keys-down)))))
+     (process-char state (name (first (remove #{:Shift} keys-down)))))
    ])
 
 (defn process-key-down
@@ -862,12 +933,50 @@
                                                               (get-in state [:mouse :start])
                                                               (get state :cursor)))))))))
 
+(defn select-row
+  [{:keys [buffer cursor char-width] :as state}]
+  (let [[by bx] (->>
+                  (y->row-index state (:y cursor))
+                  (y->buffer-cord buffer))
+        row (get-row state by bx)
+        selections (select-rows-between state
+                                        {:x 0 :y (* (line-height state) by)}
+                                        {:x (* char-width (count row)) :y (* (line-height state) by)})]
+    (-> (format-selection-rows state selections)
+        set-cursor-end-of-row)))
+
+(defn process-double-click
+  [{:keys [char-width] :as state}]
+  (let [[_ by bx start end] (cursor->buffer-cord state)
+        y (* (line-height state) by)
+        selections (select-rows-between state
+                                        {:x (* char-width start) :y y}
+                                        {:x (* char-width end) :y y})]
+
+    (-> (format-selection-rows state selections)
+        (set-cursor (* char-width end) y))))
+
+(defn select-all
+  [{:keys [char-width] :as state}]
+  (let [last-row (last-row state)
+        _ (println (number-of-lines state))
+        selections (select-rows-between state
+                                        {:x 0 :y 0}
+                                        {:x (* char-width (count last-row)) :y (* (line-height state) (number-of-lines state))})]
+    (-> (format-selection-rows state selections)
+        set-cursor-end-of-buffer)
+    )
+  )
+
 (defn handle-mouse-event
   [state {:keys [mouse-type] :as data}]
   (condp = mouse-type
     :mousemove (process-mouse-move state data)
     :mousedown (process-mouse-down state data)
-    :mouse-right-down nil                                   ;; TODO
+    :mouse-right-down (println "right-click")               ;; TODO
+    :double-click (process-double-click state)
+    :triple-click (select-row state)
+    :quadruple-click (select-all state)
     :mouseup (process-mouse-up state data)
     (js/console.warn "Unable to process mouse event: " type)))
 
@@ -877,6 +986,11 @@
     :char-width char-width
     :buffer (txt->buffer buffer char-width (editor-width state))))
 
+(defn process-resize
+  [state {:keys [editor-width]}]
+  (-> (assoc-in state [:styles :editor-width] editor-width)
+      ;; TODO format all rows
+      ))
 (defn handle-event!
   [name data]
   {:pre [(keyword? name)]}
@@ -889,6 +1003,7 @@
     :insert-txt (mutate! editor-atom insert-text-in-buffer (:txt data))
 
     :measure-char (mutate! editor-atom measure-char data)
+    :resize (mutate! editor-atom process-resize data)
     (js/console.warn "Unable to handle event" name data)))
 
 (defn active-row
@@ -1004,23 +1119,26 @@
           (recur (conj values v)))))))
 
 (defn batch-commands
-  [in-chan out-chan max-time]
-  (async/go
-    (loop [buffer []
-           t (async/timeout max-time)]
-      (let [[v p] (async/alts! [in-chan t])]
-        (cond
-          (and (nil? v) (empty? buffer))                    ;; wait for input
-          (let [d (async/<! in-chan)]
-            (recur (conj buffer d) t))
+  [max-time]
+  (let [in-chan (async/chan)
+        out-chan (async/chan)]
+    (async/go
+      (loop [buffer []
+             t (async/timeout max-time)]
+        (let [[v p] (async/alts! [in-chan t])]
+          (cond
+            (and (nil? v) (empty? buffer))                  ;; wait for input
+            (let [d (async/<! in-chan)]
+              (recur (conj buffer d) t))
 
-          (= p t)                                           ;; timeout
-          (do
-            (async/>! out-chan buffer)
-            (recur [] (async/timeout max-time)))
+            (= p t)                                         ;; timeout
+            (do
+              (async/>! out-chan buffer)
+              (recur [] (async/timeout max-time)))
 
-          :else
-          (recur (conj buffer v) t))))))
+            :else
+            (recur (conj buffer v) t)))))
+    [in-chan out-chan]))
 
 (defn editor
   []
@@ -1037,10 +1155,9 @@
                                              (listen interop/document "mousedown" false)
                                              (listen interop/document "mouseup")
                                              (listen interop/document "mousemove")
+                                             (listen js/window "resize")
                                              ])
-                                    command-in (async/chan)
-                                    command-out (async/chan)]
-                                (batch-commands command-in command-out (:key-delay (get-state editor-atom)))
+                                    [command-in command-out] (batch-commands (:key-delay (get-state editor-atom)))]
                                 (async/go (loop []
                                             (let [d (async/<! command-out)]
                                               (trigger-event :key-batch {:batch d})
@@ -1050,12 +1167,25 @@
                                                   type (keyword (.-type evt))]
 
                                               (when (contains? #{:mousedown :mouseup :mousemove} type)
-                                                (if (= 3 (aget evt "which"))
+                                                (cond
+                                                  (= 3 (aget evt "which"))
                                                   (trigger-event :mouse-event {:mouse-type :mouse-right-down :js-evt evt})
+                                                  (and (= 2 (aget evt "detail")) (= :mousedown type))
+                                                  (trigger-event :mouse-event {:mouse-type :double-click :js-evt evt})
+                                                  (and (= 3 (aget evt "detail")) (= :mousedown type))
+                                                  (trigger-event :mouse-event {:mouse-type :triple-click :js-evt evt})
+                                                  (and (= 4 (aget evt "detail")) (= :mousedown type))
+                                                  (trigger-event :mouse-event {:mouse-type :quadruple-click :js-evt evt})
+                                                  :else
                                                   (trigger-event :mouse-event {:mouse-type type :js-evt evt})))
 
                                               (when (contains? #{:keydown :keyup} type)
                                                 (async/>! command-in (handle-super-keys evt (keyword (.-key evt)))))
+
+                                              (when (= :resize type)
+                                                (trigger-event :resize {:editor-width (-> (interop/get-element-by-id "editor-area")
+                                                                                          interop/get-bounding-client-rect
+                                                                                          :width)}))
 
                                               (recur)
                                               )))))
@@ -1091,7 +1221,8 @@
                                                      :height              (str (* (count flatten-buffer) (line-height state)) "px")
                                                      :position            "absolute"
                                                      :margin-left         (str 50 "px")
-                                                     :width               (str (editor-width state) "px")
+                                                     ;:width               (str (editor-width state) "px")
+                                                     :width               "80%"
                                                      :outline             "none"
                                                      :-webkit-user-select "none"
                                                      :cursor              "text"
@@ -1101,19 +1232,6 @@
                                                      :font                "Monaco"
                                                      :font-family         "monospace"}}
                                   [active-row {:state state :current-row current-row}]
-                                  (when char-width
-                                    (doall (map-indexed (fn [i row] [:div {:key   (str "row-" i)
-                                                                           :id    (str "row-" i)
-                                                                           :style {:cursor      "text"
-                                                                                   :font-family "monospace"
-                                                                                   :white-space "pre"
-                                                                                   :line-height (str (line-height state) "px")
-                                                                                   :height      (str (line-height state) "px")
-                                                                                   :transform   (str "translate(0px, " (* i (line-height state)) "px)")
-                                                                                   :position    "absolute"
-                                                                                   :display     "inline-block"
-                                                                                   :width       "100%"}}
-                                                                     row]) flatten-buffer)))
                                   [:div {:id    "caret"
                                          :style {:transform (str "translate(" (:x cursor) "px," (* (line-height state) current-row) "px)") ;; TODO
                                                  :animation (when (empty? keys-down) "typing 3.5s steps(40, end), blink-caret .75s step-end infinite")
@@ -1141,7 +1259,18 @@
                                                                         :position   "absolute"
                                                                         :height     (str (line-height state) "px")
                                                                         :width      (str width "px")
-                                                                        :transform  (str "translate(" left "px," top "px)")}}]) selections))]]
+                                                                        :transform  (str "translate(" left "px," top "px)")}}]) selections))]
+                                  (when char-width
+                                    (doall (map-indexed (fn [i row] [:div {:key   (str "row-" i)
+                                                                           :id    (str "row-" i)
+                                                                           :style {:cursor      "text"
+                                                                                   :font-family "monospace"
+                                                                                   :white-space "pre"
+                                                                                   :line-height (str (line-height state) "px")
+                                                                                   :height      (str (line-height state) "px")
+                                                                                   :position    "relative"
+                                                                                   }}
+                                                                     row]) flatten-buffer)))]
 
                                  (when-not char-width
                                    [:div {:id    "ruler"
