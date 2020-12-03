@@ -43,7 +43,7 @@
 
 (defonce editor-atom (r/atom nil))
 (def initial-state
-  {:states      [{:buffer      "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
+  {:states      [{:buffer      "a\nThis is a editor  \nwith text!\na\n.\n\n\nhejsan\n"
                   :should-undo false
                   :should-redo false
                   :key-delay   50
@@ -60,7 +60,8 @@
                   :char-width  nil                          ; must measure this......
                   :styles      {:line-height  21            ; https://grtcalculator.com/
                                 :font-size    12
-                                :editor-width 500}}]
+                                :editor-width nil
+                                }}]
    :undo-states []
    })
 
@@ -231,13 +232,17 @@
              (is (= (y->buffer-cord buffer 6) [3 0]))
              (is (= (y->buffer-cord buffer 7) [4 0]))))}
   [buffer row-num]
-  (reduce (fn [[j i] row-group]
-            (let [rg-len (if (empty? row-group)
-                           1
-                           (count row-group))]
-              (if (> (+ i rg-len) row-num)
-                (reduced [j (- row-num i)])
-                [(inc j) (+ i rg-len)]))) [0 0] buffer))
+  (loop [bf buffer
+         by 0
+         bx 0]
+    (if (empty? bf)
+      nil
+      (let [rows (first bf)
+            row-group-length (count rows)]
+        (if (> (+ bx row-group-length) row-num)
+          [by (- row-num bx)]
+          (recur (rest bf) (inc by) (+ bx row-group-length)))))))
+
 (defn set-last
   [col value]
   (assoc col (dec (count col)) value))
@@ -289,6 +294,10 @@
 (defn x-row->px
   [{:keys [char-width]} row]
   (* (count row) char-width))
+
+(defn char-pos->px
+  [{:keys [char-width]} pos]
+  (* char-width pos))
 
 (defn y-row->px
   [state row-num]
@@ -347,7 +356,8 @@
 (defn str-insert
   {:test (fn [] (is (= (str-insert "hej" "B" 1) "hBej")))}
   [s c i]
-  (str (subs s 0 i) c (subs s i)))
+  (let [s (if (nil? s) "" s)]
+    (str (subs s 0 i) c (subs s i))))
 
 (defn remove-char-at
   {:test (fn [] (is (= (remove-char-at "hej" 0) "ej")))}
@@ -374,7 +384,8 @@
 (defn cursor-end-of-row?
   [{:keys [char-width cursor] :as state}]
   (< (- (editor-width state)
-        (:x cursor) char-width)
+        (:x cursor)
+        char-width)
      char-width))
 
 (defn cursor-first-of-row?
@@ -496,6 +507,49 @@
         (assoc :selections [])
         (set-cursor left top))))
 
+(defn cursor->index
+  "Returns the 1d index where the cursor is in the buffer."
+  [{:keys [cursor buffer] :as state}]
+  (let [{:keys [x y]} cursor]
+    (loop [rows (flatten buffer)
+           row-index 1
+           pos 0]
+      (if (empty? rows)
+        nil
+        (let [row (first rows)]
+          (if (and (>= (y-row->px state row-index) y) (>= (x-row->px state row) x))
+            (do
+              (+ pos (x->char-pos state)))
+            (recur (rest rows) (inc row-index) (+ 1 pos (count row)))))))))
+
+(defn set-cursor-at-index
+  "Sets the cursor by a 1d index `i`"
+  [{:keys [buffer] :as state} i]
+  (loop [bf buffer
+         n-chars 0
+         rows 0]
+    (if (empty? bf)
+      nil
+      (let [[bf-chars bf-rows done] (loop [bf-row (first bf)
+                                           bf-chars 0
+                                           bf-rows 0]
+                                      (if (empty? bf-row)
+                                        [bf-chars bf-rows]
+                                        (let [row (first bf-row)
+                                              rc (count row)
+                                              limit (+ n-chars bf-chars rc)]
+                                          (if (>= limit i)
+                                            (let [x (- i n-chars)
+                                                  y (+ rows bf-rows)]
+                                              [(+ bf-chars rc 1) bf-rows [x y]])
+                                            (recur (rest bf-row)
+                                                   (+ bf-chars rc 1) ;; +1 \n
+                                                   (inc bf-rows))))))]
+        (if done
+          (let [[x y] done]
+            (println bf-chars bf-rows "SET IT AT " i " AND " x y)
+            (set-cursor state (char-pos->px state x) (y-row->px state y)))
+          (recur (rest bf) (+ n-chars bf-chars) (+ rows bf-rows)))))))
 
 (defn process-char
   [state key]
@@ -505,18 +559,22 @@
         [by bx] (->>
                   (y->row-index state (:y cursor))
                   (y->buffer-cord buffer))
-        row (get-in buffer [by bx])
-        max-chars (line-max-chars state)
+        row (or (get-in buffer [by bx]) "")
+        max-chars (dec (line-max-chars state))              ;; some margin..
+        row-group (get-in buffer [by])
         line-group (->> (x->char-pos state)
                         (str-insert row key)
-                        (assoc (get-in state [:buffer by]) bx)
-                        (partition-buffer-row max-chars))]
+                        (assoc row-group bx)
+                        (partition-buffer-row max-chars))
+        cursor-index (cursor->index state)]
     (-> (assoc-in state [:buffer by] line-group)
-        (#(if (cursor-end-of-row? %)
-            (-> (inc-cursor-y %)
-                set-cursor-start)
-            %))
-        inc-cursor-x)))
+        (set-cursor-at-index (inc cursor-index))
+        ;(#(if (cursor-end-of-row? %)
+        ;    (-> (inc-cursor-y %)
+        ;        set-cursor-start)
+        ;    %))
+        ;inc-cursor-x
+        )))
 
 
 (defn process-backspace
@@ -819,7 +877,8 @@
           (assoc-in [:mouse :is-down] true)
           (assoc :cursor (clamp-cursor state mouse))
           (assoc :selections [])
-          (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x)))))))
+          (update-in [:cursor] (fn [{:keys [x] :as c}] (assoc c :max-x x)))
+          ))))
 
 ;; SET CURSOR
 (defn process-mouse-up
@@ -906,6 +965,7 @@
                                                        [byb bxb (if same-row? a-z-offset 0) b-z-offset]
                                                        [bya bxa (if same-row? b-z-offset 0) a-z-offset])))))))
 
+
 (defn format-selection-rows
   "Get the visual dimension of the selected row"
   [{:keys [char-width buffer] :as state} selection-list]
@@ -947,19 +1007,17 @@
 
 (defn process-double-click
   [{:keys [char-width] :as state}]
-  (let [[_ by bx start end] (cursor->buffer-cord state)
+  (let [[_ by _ start end] (cursor->buffer-cord state)
         y (* (line-height state) by)
         selections (select-rows-between state
                                         {:x (* char-width start) :y y}
                                         {:x (* char-width end) :y y})]
-
     (-> (format-selection-rows state selections)
         (set-cursor (* char-width end) y))))
 
 (defn select-all
   [{:keys [char-width] :as state}]
   (let [last-row (last-row state)
-        _ (println (number-of-lines state))
         selections (select-rows-between state
                                         {:x 0 :y 0}
                                         {:x (* char-width (count last-row)) :y (* (line-height state) (number-of-lines state))})]
@@ -980,17 +1038,27 @@
     :mouseup (process-mouse-up state data)
     (js/console.warn "Unable to process mouse event: " type)))
 
-(defn measure-char
-  [{:keys [buffer] :as state} {:keys [char-width]}]
-  (assoc state
-    :char-width char-width
-    :buffer (txt->buffer buffer char-width (editor-width state))))
+(defn measure
+  [{:keys [buffer] :as state} {:keys [char-width editor-width]}]
+  (-> (assoc-in state [:styles :editor-width] editor-width)
+      (assoc :char-width char-width
+             :buffer (txt->buffer buffer char-width editor-width))))
+
+(defn format-buffer
+  [{:keys [buffer] :as state}]
+  (let [max-chars (line-max-chars state)]
+    (->> (mapv (partial partition-buffer-row max-chars) buffer)
+         (mapv (fn [r] (if (empty? r) [""] r)))
+         (assoc state :buffer))))
 
 (defn process-resize
   [state {:keys [editor-width]}]
-  (-> (assoc-in state [:styles :editor-width] editor-width)
-      ;; TODO format all rows
-      ))
+  (let [cursor-index (cursor->index state)]
+    (-> (assoc-in state [:styles :editor-width] editor-width)
+        format-buffer
+        (set-cursor-at-index cursor-index)
+        )))
+
 (defn handle-event!
   [name data]
   {:pre [(keyword? name)]}
@@ -1002,7 +1070,7 @@
 
     :insert-txt (mutate! editor-atom insert-text-in-buffer (:txt data))
 
-    :measure-char (mutate! editor-atom measure-char data)
+    :measure (mutate! editor-atom measure data)
     :resize (mutate! editor-atom process-resize data)
     (js/console.warn "Unable to handle event" name data)))
 
@@ -1140,55 +1208,62 @@
             (recur (conj buffer v) t)))))
     [in-chan out-chan]))
 
+(defn mousedown?
+  [type]
+  (= type :mousedown))
+
 (defn editor
   []
   (let [trigger-event handle-event!]
     (r/create-class
       {:component-did-mount (fn []
-                              (when-not (:char-width (get-state editor-atom))
-                                (trigger-event :measure-char {:char-width (-> (interop/get-element-by-id "ruler")
-                                                                              interop/get-bounding-client-rect
-                                                                              :width)}))
-                              (let [chans (async/merge
-                                            [
-                                             (listen (interop/get-element-by-id "editor-input") "keydown" false)
-                                             (listen interop/document "mousedown" false)
-                                             (listen interop/document "mouseup")
-                                             (listen interop/document "mousemove")
-                                             (listen js/window "resize")
-                                             ])
-                                    [command-in command-out] (batch-commands (:key-delay (get-state editor-atom)))]
-                                (async/go (loop []
-                                            (let [d (async/<! command-out)]
-                                              (trigger-event :key-batch {:batch d})
-                                              (recur))))
-                                (async/go (loop []
-                                            (let [evt (async/<! chans)
-                                                  type (keyword (.-type evt))]
+                              (let [state (get-state editor-atom)]
+                                (when-not (:char-width state)
+                                  (trigger-event :measure {:char-width   (-> (interop/get-element-by-id "ruler")
+                                                                             interop/get-bounding-client-rect
+                                                                             :width)
+                                                           :editor-width (-> (interop/get-element-by-id "editor-area")
+                                                                             interop/get-bounding-client-rect
+                                                                             :width)}))
+                                (let [chans (async/merge
+                                              [
+                                               (listen (interop/get-element-by-id "editor-input") "keydown" false)
+                                               (listen interop/document "mousedown" false)
+                                               (listen interop/document "mouseup")
+                                               (listen interop/document "mousemove")
+                                               (listen js/window "resize")
+                                               ])
+                                      [command-in command-out] (batch-commands (:key-delay state))]
+                                  (async/go (loop []
+                                              (let [d (async/<! command-out)]
+                                                (trigger-event :key-batch {:batch d})
+                                                (recur))))
+                                  (async/go (loop []
+                                              (let [evt (async/<! chans)
+                                                    type (keyword (.-type evt))]
 
-                                              (when (contains? #{:mousedown :mouseup :mousemove} type)
-                                                (cond
-                                                  (= 3 (aget evt "which"))
-                                                  (trigger-event :mouse-event {:mouse-type :mouse-right-down :js-evt evt})
-                                                  (and (= 2 (aget evt "detail")) (= :mousedown type))
-                                                  (trigger-event :mouse-event {:mouse-type :double-click :js-evt evt})
-                                                  (and (= 3 (aget evt "detail")) (= :mousedown type))
-                                                  (trigger-event :mouse-event {:mouse-type :triple-click :js-evt evt})
-                                                  (and (= 4 (aget evt "detail")) (= :mousedown type))
-                                                  (trigger-event :mouse-event {:mouse-type :quadruple-click :js-evt evt})
-                                                  :else
-                                                  (trigger-event :mouse-event {:mouse-type type :js-evt evt})))
+                                                (when (contains? #{:mousedown :mouseup :mousemove} type)
+                                                  (cond
+                                                    (= 3 (aget evt "which"))
+                                                    (trigger-event :mouse-event {:mouse-type :mouse-right-down :js-evt evt})
+                                                    (and (= 2 (aget evt "detail")) (mousedown? type))
+                                                    (trigger-event :mouse-event {:mouse-type :double-click :js-evt evt})
+                                                    (and (= 3 (aget evt "detail")) (mousedown? type))
+                                                    (trigger-event :mouse-event {:mouse-type :triple-click :js-evt evt})
+                                                    (and (= 4 (aget evt "detail")) (mousedown? type))
+                                                    (trigger-event :mouse-event {:mouse-type :quadruple-click :js-evt evt})
+                                                    :else
+                                                    (trigger-event :mouse-event {:mouse-type type :js-evt evt})))
 
-                                              (when (contains? #{:keydown :keyup} type)
-                                                (async/>! command-in (handle-super-keys evt (keyword (.-key evt)))))
+                                                (when (contains? #{:keydown :keyup} type)
+                                                  (async/>! command-in (handle-super-keys evt (keyword (.-key evt)))))
 
-                                              (when (= :resize type)
-                                                (trigger-event :resize {:editor-width (-> (interop/get-element-by-id "editor-area")
-                                                                                          interop/get-bounding-client-rect
-                                                                                          :width)}))
-
-                                              (recur)
-                                              )))))
+                                                (when (= :resize type)
+                                                  (trigger-event :resize {:editor-width (-> (interop/get-element-by-id "editor-area")
+                                                                                            interop/get-bounding-client-rect
+                                                                                            :width)}))
+                                                (recur)
+                                                ))))))
        :reagent-render      (fn []
                               (let [{:keys [buffer selections char-width cursor keys-down] :as state} (get-state editor-atom)
                                     current-row (y->row-index state (:y cursor))
@@ -1221,8 +1296,8 @@
                                                      :height              (str (* (count flatten-buffer) (line-height state)) "px")
                                                      :position            "absolute"
                                                      :margin-left         (str 50 "px")
-                                                     ;:width               (str (editor-width state) "px")
-                                                     :width               "80%"
+                                                     :width               (str 200 "px") ;; TODO REMOVE
+                                                     ;:min-width           "30%"
                                                      :outline             "none"
                                                      :-webkit-user-select "none"
                                                      :cursor              "text"
