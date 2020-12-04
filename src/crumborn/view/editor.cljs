@@ -43,7 +43,7 @@
 
 (defonce editor-atom (r/atom nil))
 (def initial-state
-  {:states      [{:buffer      "a\nThis is a editor  \nwith text!\na\n.\n\n\nhejsan\n"
+  {:states      [{:buffer      "a\nThis is a editor\nwith text!\na\n.\n\n\nhejsan\n"
                   :should-undo false
                   :should-redo false
                   :key-delay   50
@@ -357,6 +357,7 @@
   {:test (fn [] (is (= (str-insert "hej" "B" 1) "hBej")))}
   [s c i]
   (let [s (if (nil? s) "" s)]
+    (println "hmmm " s)
     (str (subs s 0 i) c (subs s i))))
 
 (defn remove-char-at
@@ -378,7 +379,7 @@
                        {:buffer ["r1" "new-row" "r2"]})))}
   [{:keys [buffer] :as state} row-number new-row]
   (assoc state :buffer (vec (concat (subvec buffer 0 row-number)
-                                    new-row
+                                    (if (seq? new-row) new-row [new-row])
                                     (subvec buffer row-number)))))
 
 (defn cursor-end-of-row?
@@ -507,23 +508,84 @@
         (assoc :selections [])
         (set-cursor left top))))
 
+;; PROBLEM
+;; Q - cursor end of row does not jumnp to start of next row..
+;; should we count newlines?
+;; [["a"] ["T  h i s i s__a______editor"] ["with text!"] ["a"] ["."] [""] [""] ["hejsan"]]
+;;   0|1    2|3|4|5|6|7|8|9|10|11
+
+
 (defn cursor->index
-  "Returns the 1d index where the cursor is in the buffer."
+  "Returns the 1d index where the cursor is in the buffer.
+  the index is a zero-indexed integer indicating where
+  the cursor is located"
+  {:test (fn []
+           (let [xy-state (fn [cursor] {:styles     {:line-height 1}
+                                        :char-width 1
+                                        :cursor     cursor
+                                        :buffer     [["a"] ["1234"] [""] ["a"] ["."] [""] [""] ["hejsan"]]})]
+             (is (= (cursor->index (xy-state {:x 0 :y 0})) 0))
+             (is (= (cursor->index (xy-state {:x 1 :y 0})) 1))
+             (is (= (cursor->index (xy-state {:x 2 :y 0})) nil)) ;; ofb
+             (is (= (cursor->index (xy-state {:x 0 :y 1})) 2))
+             (is (= (cursor->index (xy-state {:x 4 :y 1})) 6))
+             (is (= (cursor->index (xy-state {:x 1 :y 3})) 9))
+             (let [state (assoc (xy-state {:x 1 :y 1}) :buffer [["aabc123456789" "a"]])]
+               (is (= (cursor->index state) 15))
+               )
+             )
+           )}
   [{:keys [cursor buffer] :as state}]
   (let [{:keys [x y]} cursor]
-    (loop [rows (flatten buffer)
-           row-index 1
-           pos 0]
-      (if (empty? rows)
-        nil
-        (let [row (first rows)]
-          (if (and (>= (y-row->px state row-index) y) (>= (x-row->px state row) x))
-            (do
-              (+ pos (x->char-pos state)))
-            (recur (rest rows) (inc row-index) (+ 1 pos (count row)))))))))
+    (let [c-row (Math/floor (/ y (line-height state)))]
+      (loop [rows (flatten buffer)
+             row-index 0
+             pos 0]
+        (if (empty? rows)
+          nil
+          (let [row (first rows)
+                ch (x->char-pos state)]
+            (if (and (= c-row row-index) (<= ch (count row)))
+              (do
+                (+ pos ch))
+              (recur (rest rows) (inc row-index) (+ pos (count row) 1)))))))))
 
 (defn set-cursor-at-index
-  "Sets the cursor by a 1d index `i`"
+  "Sets the cursor by a 1d index `i`
+  i is zero-indexed"
+  {:test (fn []
+           (let [state {:styles     {:line-height 1}
+                        :char-width 1
+                        :cursor     {:x nil :y nil}
+                        :buffer     [["a"] ["1234" "56"] [""] ["a"] ["."] [""] [""] ["hejsan"]]}]
+             ;; first row, just before 'a'
+             (is (= (-> (set-cursor-at-index state 0) :cursor)
+                    {:x 0 :y 0}))
+             ;;; 1st row, right after 'a'
+             (is (= (-> (set-cursor-at-index state 1) :cursor)
+                    {:x 1 :y 0}))
+             ;;; 2nd row at index 0
+             (is (= (-> (set-cursor-at-index state 2) :cursor)
+                    {:x 0 :y 1}))
+             ;;; 3d row at index 0
+             (is (= (-> (set-cursor-at-index state 7) :cursor)
+                    {:x 0 :y 2}))
+             ;;; last at 3d row
+             (is (= (-> (set-cursor-at-index state 9) :cursor)
+                    {:x 2 :y 2}))
+             ;;; 4th row
+             (is (= (-> (set-cursor-at-index state 10) :cursor)
+                    {:x 0 :y 3}))
+             ;; 5th row, first
+             (is (= (-> (set-cursor-at-index state 11) :cursor)
+                    {:x 0 :y 4}))
+             ;; should be on 2nd row, index 0'
+             (let [state (assoc state :buffer [["a222323222222" "2"]])]
+               (is (= (-> (set-cursor-at-index state 14) :cursor)
+                      {:x 0 :y 1}))
+               )
+             )
+           )}
   [{:keys [buffer] :as state} i]
   (loop [bf buffer
          n-chars 0
@@ -539,15 +601,14 @@
                                               rc (count row)
                                               limit (+ n-chars bf-chars rc)]
                                           (if (>= limit i)
-                                            (let [x (- i n-chars)
+                                            (let [x (- i n-chars bf-chars)
                                                   y (+ rows bf-rows)]
-                                              [(+ bf-chars rc 1) bf-rows [x y]])
+                                              [(+ bf-chars rc) (inc bf-rows) [x y]])
                                             (recur (rest bf-row)
-                                                   (+ bf-chars rc 1) ;; +1 \n
+                                                   (+ bf-chars rc 1) ;; 1 for \n
                                                    (inc bf-rows))))))]
         (if done
           (let [[x y] done]
-            (println bf-chars bf-rows "SET IT AT " i " AND " x y)
             (set-cursor state (char-pos->px state x) (y-row->px state y)))
           (recur (rest bf) (+ n-chars bf-chars) (+ rows bf-rows)))))))
 
@@ -562,18 +623,20 @@
         row (or (get-in buffer [by bx]) "")
         max-chars (dec (line-max-chars state))              ;; some margin..
         row-group (get-in buffer [by])
+        curr-lg-c (count (get-in state [:buffer by]))
+        _ (println "ROOOW " buffer)
         line-group (->> (x->char-pos state)
                         (str-insert row key)
                         (assoc row-group bx)
-                        (partition-buffer-row max-chars))
-        cursor-index (cursor->index state)]
+                        (partition-buffer-row max-chars))]
     (-> (assoc-in state [:buffer by] line-group)
-        (set-cursor-at-index (inc cursor-index))
-        ;(#(if (cursor-end-of-row? %)
-        ;    (-> (inc-cursor-y %)
-        ;        set-cursor-start)
-        ;    %))
-        ;inc-cursor-x
+        (as-> state
+              (do
+                (set-cursor-at-index state (+ (cursor->index state)
+                                              (if (> (count line-group) curr-lg-c)
+                                                2           ;; 2 for new-char + \n
+                                                1           ;; otherwise + new-char
+                                                )))))
         )))
 
 
@@ -590,7 +653,7 @@
   (let [row-index (y->row-index state (:y cursor))
         [by bx] (y->buffer-cord buffer row-index)
         row (get-in buffer [by bx])
-        max-chars (line-max-chars state)
+        max-chars (dec (line-max-chars state))
         buffer-row (get-in state [:buffer by])]
     (cond
       (has-selections? selections)
@@ -657,7 +720,7 @@
         [first second] (split-str row x-offset)
         rest-buffer-row (subvec buffer-row (inc bx))]
     (->
-      (assoc-in state [:buffer by] (subvec buffer-row 0 (inc bx)))
+      (assoc-in state [:buffer by] (subvec buffer-row 0 (inc bx))) ;; TODO this is broken
       (assoc-in [:buffer by bx] (if (nil? first) "" first))
       (insert-row-at (inc by) [(into [] (cons second rest-buffer-row))])
       inc-cursor-y
@@ -1296,8 +1359,7 @@
                                                      :height              (str (* (count flatten-buffer) (line-height state)) "px")
                                                      :position            "absolute"
                                                      :margin-left         (str 50 "px")
-                                                     :width               (str 200 "px") ;; TODO REMOVE
-                                                     ;:min-width           "30%"
+                                                     :width               "80%"
                                                      :outline             "none"
                                                      :-webkit-user-select "none"
                                                      :cursor              "text"
