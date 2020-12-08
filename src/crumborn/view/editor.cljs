@@ -37,6 +37,16 @@
    [:path {:d "M0 0h24v24H0z" :fill "none"}]
    [:path {:d "M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z"}]])
 
+(defn misc-icon
+  []
+  [:svg {:enable-background "new 0 0 24 24" :height "24" :viewbox "0 0 24 24" :width "24"}
+   [:g
+    [:rect {:fill "none" :height "24" :width "24"}]]
+   [:g
+    [:g
+     [:path {:d "M14.17,13.71l1.4-2.42c0.09-0.15,0.05-0.34-0.08-0.45l-1.48-1.16c0.03-0.22,0.05-0.45,0.05-0.68s-0.02-0.46-0.05-0.69 l1.48-1.16c0.13-0.11,0.17-0.3,0.08-0.45l-1.4-2.42c-0.09-0.15-0.27-0.21-0.43-0.15L12,4.83c-0.36-0.28-0.75-0.51-1.18-0.69 l-0.26-1.85C10.53,2.13,10.38,2,10.21,2h-2.8C7.24,2,7.09,2.13,7.06,2.3L6.8,4.15C6.38,4.33,5.98,4.56,5.62,4.84l-1.74-0.7 c-0.16-0.06-0.34,0-0.43,0.15l-1.4,2.42C1.96,6.86,2,7.05,2.13,7.16l1.48,1.16C3.58,8.54,3.56,8.77,3.56,9s0.02,0.46,0.05,0.69 l-1.48,1.16C2,10.96,1.96,11.15,2.05,11.3l1.4,2.42c0.09,0.15,0.27,0.21,0.43,0.15l1.74-0.7c0.36,0.28,0.75,0.51,1.18,0.69 l0.26,1.85C7.09,15.87,7.24,16,7.41,16h2.8c0.17,0,0.32-0.13,0.35-0.3l0.26-1.85c0.42-0.18,0.82-0.41,1.18-0.69l1.74,0.7 C13.9,13.92,14.08,13.86,14.17,13.71z M8.81,11c-1.1,0-2-0.9-2-2c0-1.1,0.9-2,2-2s2,0.9,2,2C10.81,10.1,9.91,11,8.81,11z"}]
+     [:path {:d "M21.92,18.67l-0.96-0.74c0.02-0.14,0.04-0.29,0.04-0.44c0-0.15-0.01-0.3-0.04-0.44l0.95-0.74 c0.08-0.07,0.11-0.19,0.05-0.29l-0.9-1.55c-0.05-0.1-0.17-0.13-0.28-0.1l-1.11,0.45c-0.23-0.18-0.48-0.33-0.76-0.44l-0.17-1.18 C18.73,13.08,18.63,13,18.53,13h-1.79c-0.11,0-0.21,0.08-0.22,0.19l-0.17,1.18c-0.27,0.12-0.53,0.26-0.76,0.44l-1.11-0.45 c-0.1-0.04-0.22,0-0.28,0.1l-0.9,1.55c-0.05,0.1-0.04,0.22,0.05,0.29l0.95,0.74c-0.02,0.14-0.03,0.29-0.03,0.44 c0,0.15,0.01,0.3,0.03,0.44l-0.95,0.74c-0.08,0.07-0.11,0.19-0.05,0.29l0.9,1.55c0.05,0.1,0.17,0.13,0.28,0.1l1.11-0.45 c0.23,0.18,0.48,0.33,0.76,0.44l0.17,1.18c0.02,0.11,0.11,0.19,0.22,0.19h1.79c0.11,0,0.21-0.08,0.22-0.19l0.17-1.18 c0.27-0.12,0.53-0.26,0.75-0.44l1.12,0.45c0.1,0.04,0.22,0,0.28-0.1l0.9-1.55C22.03,18.86,22,18.74,21.92,18.67z M17.63,18.83 c-0.74,0-1.35-0.6-1.35-1.35s0.6-1.35,1.35-1.35s1.35,0.6,1.35,1.35S18.37,18.83,17.63,18.83z"}]]]])
+
 (enable-console-print!)
 ;; TODO
 ;; [X]   handle when rows expands to multiple rows, can no longer use 21px as height... :~>
@@ -95,7 +105,8 @@
                   :char-width  nil                          ; must measure this......
                   :styles      {:line-height  21            ; https://grtcalculator.com/
                                 :font-size    12
-                                :editor-width nil}}]
+                                :editor-width nil}
+                  :config      {:expanded? false}}]
    :undo-states []
    })
 
@@ -1254,12 +1265,12 @@
     :resize (mutate! editor-atom process-resize data)
 
     :undo (mutate! editor-atom (fn [state] (assoc state :should-undo true)))
-    :redo (mutate! editor-atom (fn [state]
-                                 (let [s
-                                       (assoc state :should-redo true)]
-                                   s
-                                   )
-                                 ))
+    :redo (mutate! editor-atom (fn [state] (assoc state :should-redo true)))
+
+    :scroll (mutate! editor-atom (fn [state] (-> (assoc-in state [:scroll :top] (:scroll-top data))
+                                                 (assoc-in [:scroll :offset-height] (:offset-height data)))))
+
+    :toggle-config (mutate! editor-atom (fn [state] (assoc-in state [:config :expanded?] (not (get-in state [:config :expanded?])))))
 
     (js/console.warn "Unable to handle event" name data)))
 
@@ -1292,12 +1303,13 @@
   (let [hover-atom (r/atom nil)]
     (fn []
       (let [hover (deref hover-atom)]
-        [:div {:style {:padding      "5px"
-                       :padding-left "10px"
-                       :border       "1px dashed green"
-                       :width        "100%"
-                       :display      "flex"
-                       :align-items  "center"}}
+        [:div {:style {:padding         "5px"
+                       :padding-left    "10px"
+                       :border          "1px dashed green"
+                       :width           "100%"
+                       :display         "flex"
+                       :justify-content "space-around"
+                       :align-items     "center"}}
          [:div {:id             :undo
                 :on-mouse-over  (fn [] (reset! hover-atom :undo))
                 :on-mouse-leave (fn [] (reset! hover-atom nil))
@@ -1356,29 +1368,41 @@
                                  :opacity     (if (= hover :link) 1 0.7)
                                  :font-weight "bold"}}
           [insert-link-icon]]
+         [:div {:id             :misc
+                :on-mouse-over  (fn [] (reset! hover-atom :misc))
+                :on-mouse-leave (fn [] (reset! hover-atom nil))
+                :on-click       (fn [evt]
+                                  (.preventDefault evt)
+                                  (trigger-event :toggle-config {}))
+                :style          {:cursor      "pointer"
+                                 :height      "24px"
+                                 :opacity     (if (= hover :misc) 1 0.7)
+                                 :font-weight "bold"}}
+          [misc-icon]]
          ]))))
 
 (defn gutter
   [{:keys [state flatten-buffer]}]
-  [:div {:id    "gutter"
-         :style {:width            "50px"
-                 ;:float            "left"
-                 :background-color "#e8e8e8"
-                 :direction        "rtl"
-                 :padding-right    "10px"
-                 :display          "inline-block"
-                 :height           (str (* (line-height state) (count flatten-buffer)) "px")
-                 :color            "#AAA"}}
-   (doall (map-indexed (fn [i _]
-                         [:span {:key   (str "row-num-" i)
-                                 :style {:position    "absolute"
-                                         :float       "right"
-                                         :height      "21px"
-                                         :font        "Monaco"
-                                         :font-family "monospace"
-                                         :font-size   (font-size state)
-                                         :transform   (str "translate(0px, " (* i (line-height state)) "px)")
-                                         }} (inc i)]) flatten-buffer))])
+  (let [n-rows (count flatten-buffer)]
+    [:div {:id    "gutter"
+           :style {:width            (str (+ 1 (count (str n-rows))) "ch")
+                   :background-color "#e8e8e8"
+                   :direction        "rtl"
+                   :padding-right    "7px"
+                   :padding-left     "25px"
+                   :display          "inline-block"
+                   :height           (str (* n-rows (line-height state)) "px")
+                   :color            "#AAA"}}
+     (doall (map-indexed (fn [i _]
+                           [:span {:key   (str "row-num-" i)
+                                   :style {:position    "absolute"
+                                           :float       "right"
+                                           :height      "21px"
+                                           :font        "Monaco"
+                                           :font-family "monospace"
+                                           :font-size   (font-size state)
+                                           :transform   (str "translate(0px, " (* i (line-height state)) "px)")
+                                           }} (inc i)]) flatten-buffer))]))
 
 (defn focus!
   [el]
@@ -1419,25 +1443,8 @@
   [type]
   (= type :mousedown))
 
-(defn scrollbar
-  [{:keys [editor-area]}]
-  [:div {:style {:width            "7px"
-                 :height           "100%"
-                 :right            "0"
-                 :top              0
-                 :position         "absolute"
-                 :border-radius    "7px"
-                 :bottom           0
-                 :background-color "rgba(0,0,0,0.35)"
-                 }}
-   [:div {:id    :scroll-bar
-          :style {:position "relative"
-                  :height   "100%"}}]
-   [:div {:id :scroll-thumb}]
-   ])
-
 (defn setup-listeners!
-  [{:keys [trigger-event state editor-input editor-area]}]
+  [{:keys [trigger-event state editor-input editor-area editor-container]}]
   (let [chans (async/merge
                 [
                  (listen editor-input "keydown" false)
@@ -1474,13 +1481,8 @@
                     (trigger-event :resize {:editor-width (-> editor-area
                                                               interop/get-bounding-client-rect
                                                               :width)}))
-                  (recur)
-                  ))))
-  )
 
-(defn set-ref-builder
-  [refs-atom path]
-  (fn [com] (swap! refs-atom assoc path com)))
+                  (recur))))))
 
 (defn insert-ruler!
   [{:keys [styles]}]
@@ -1496,35 +1498,40 @@
   (let [el (interop/get-element-by-id "ruler")]
     (js-invoke (.-parentNode el) "removeChild" el)))
 
+(defn config-bar
+  [{:keys [config]}]
+  (let [expanded? (:expanded? config)]
+    [:div {:style {:border   "1px dashed orange"
+                   :position "absolute"
+                   :overflow "hidden"
+                   :width    (if expanded? "200px" "0px")
+                   :height   "50px"}} "Hi"]))
+
 (defn editor
   []
-
-  (insert-ruler! (get-state editor-atom))
-
+  (when-not (interop/get-element-by-id "ruler")
+    (insert-ruler! (get-state editor-atom)))
   (let [trigger-event handle-event!
         refs-atom (atom {:editor-area  nil
                          :editor-input nil})
-        set-editor-area-ref! (set-ref-builder refs-atom :editor-area)
-        set-editor-input-ref! (set-ref-builder refs-atom :editor-input)]
+        set-editor-area-ref! (fn [com] (swap! refs-atom assoc :editor-area com))
+        set-editor-input-ref! (fn [com] (swap! refs-atom assoc :editor-input com))]
     (r/create-class
       {:component-did-mount (fn []
                               (let [state (get-state editor-atom)]
                                 (when-not (:char-width state)
-                                  (trigger-event :measure {:char-width   (-> (interop/get-element-by-id "ruler")
-                                                                             interop/get-bounding-client-rect
-                                                                             :width)
-                                                           :editor-width (-> @refs-atom
-                                                                             :editor-area
-                                                                             interop/get-bounding-client-rect
-                                                                             :width)
-                                                           })
-                                  (remove-ruler!)
-                                  )
+                                  (let [{:keys [width]} (-> @refs-atom :editor-area interop/get-bounding-client-rect)]
+                                    (trigger-event :measure {:char-width   (-> (interop/get-element-by-id "ruler")
+                                                                               interop/get-bounding-client-rect
+                                                                               :width)
+                                                             :editor-width width}))
+                                  (remove-ruler!))
 
                                 (setup-listeners! {:state         state
                                                    :trigger-event trigger-event
                                                    :editor-input  (-> @refs-atom :editor-input)
-                                                   :editor-area   (-> @refs-atom :editor-area)})))
+                                                   :editor-area   (-> @refs-atom :editor-area)
+                                                   })))
        :reagent-render      (fn []
                               (let [{:keys [buffer selections char-width cursor keys-down] :as state} (get-state editor-atom)
                                     current-row (y->row-index state (:y cursor))
@@ -1536,19 +1543,18 @@
                                  [:div {:style {:display        "flex"
                                                 :flex-direction "row-reverse"}}
 
-                                  [:div {:style {:float  "right"
-                                                 :border "1px dashed orange"
-                                                 :flex   1
-                                                 :height "50px"}} "Hi"]
+                                  [config-bar {:config (:config state)}]
 
                                   [:div {:on-click (fn [] (focus! (interop/get-element-by-id "editor-input")))
                                          :style    {:position "relative"
+                                                    :height   "100%"
                                                     :flex     5}}
 
-                                   [:div {:style {:position       "relative"
-                                                  :max-height     "200px"
-                                                  :min-height     "200px"
+                                   [:div {:id    :editor-container
+                                          :style {:position       "relative"
+                                                  :max-height     "100px"
                                                   :display        "flex"
+                                                  :overflow       "auto"
                                                   :flex-direction "row"}}
                                     [gutter {:state state :flatten-buffer flatten-buffer}]
                                     [:textarea {:id          "editor-input"
@@ -1568,15 +1574,16 @@
                                                               :outline   "none"}}]
                                     [:div {:id         "editor-area"
                                            :ref        set-editor-area-ref!
+                                           ;:ref        (fn [com]
+                                           ;              (swap! refs-atom assoc :editor-area com))
                                            :tab-index  0
                                            :on-click   (fn [] (focus! (interop/get-element-by-id "editor-input")))
                                            :draggable  false
                                            :userselect "none"
                                            :style      {:border              "1px solid blue"
                                                         :box-sizing          "border-box"
-                                                        :height              (str (* (count flatten-buffer) (line-height state)) "px")
+                                                        :height              "100%"
                                                         :flex                1
-                                                        :margin-right        "7px" ;; TODO this is the scrollbar width
                                                         :outline             "none"
                                                         :-webkit-user-select "none"
                                                         :cursor              "text"
@@ -1624,8 +1631,16 @@
                                                                                       :line-height (str (line-height state) "px")
                                                                                       :height      (str (line-height state) "px")
                                                                                       :position    "relative"}}
-                                                                        row]) flatten-buffer)))]
-                                    [scrollbar {:editor-area (-> @refs-atom :editor-area)}]]
+                                                                        row]) flatten-buffer)))
+                                     ]
+                                    ]
+                                   [:div {:style {:flex             1
+                                                  :height           "20px"
+                                                  :border           "1px solid #e4e4e4"
+                                                  :background-color "#f1f1f1"
+                                                  :font-size        12}}
+                                    [:span current-row " / " (x->char-pos state) " | " (count flatten-buffer)]
+                                    ]
                                    ]
                                   ]
                                  ]))})))
