@@ -39,7 +39,7 @@
 
 (defn misc-icon
   []
-  [:svg {:enable-background "new 0 0 24 24" :height "24" :viewbox "0 0 24 24" :width "24"}
+  [:svg {:enable-background "new 0 0 24 24" :height "24" :view-box "0 0 24 24" :width "24"}
    [:g
     [:rect {:fill "none" :height "24" :width "24"}]]
    [:g
@@ -83,7 +83,7 @@
 ;; [X] fix bug when pressing enter
 ;; [] fix adjust fontsize
 ;; [] fix e2e tests
-;; [] fix row/line indicator for the cursor position
+;; [X] fix row/line indicator for the cursor position
 ;; [] lose the coupling between editor width and char-width somehow?
 
 (defonce editor-atom (r/atom nil))
@@ -104,9 +104,19 @@
                                 :end     {:x 0 :x-screen 0 :y 0 :y-screen 0}}
                   :char-width  nil                          ; must measure this......
                   :styles      {:line-height  21            ; https://grtcalculator.com/
-                                :font-size    12
+                                :font-size    16
                                 :editor-width nil}
-                  :config      {:expanded? false}}]
+                  :config      {:expanded?           false
+                                :show-gutter         true
+                                :show-line-numbers   true
+                                :show-status-bar     true
+                                :show-toolbar        true
+                                :cursor-width        1
+                                :cursor-color        "orange"
+                                :cursor-opacity      0.3
+                                :selection-color     "#B5D5FF"
+                                :active-row-bg-color "#ecece7"
+                                }}]
    :undo-states []
    })
 
@@ -1285,7 +1295,7 @@
              :draggable  false
              :userselect "none"
              :style      {:position            "absolute"
-                          :background          "#ecece7"
+                          :background          (get-in state [:config :active-row-bg-color])
                           :width               (str editor-width "px")
                           :outline             "none"
                           :-webkit-user-select "none"
@@ -1300,109 +1310,116 @@
 
 (defn toolbar
   [{:keys [state trigger-event]}]
-  (let [hover-atom (r/atom nil)]
-    (fn []
-      (let [hover (deref hover-atom)]
-        [:div {:style {:padding         "5px"
-                       :padding-left    "10px"
-                       :border          "1px dashed green"
-                       :width           "100%"
-                       :display         "flex"
-                       :justify-content "space-around"
-                       :align-items     "center"}}
-         [:div {:id             :undo
-                :on-mouse-over  (fn [] (reset! hover-atom :undo))
-                :on-mouse-leave (fn [] (reset! hover-atom nil))
-                :on-click       (fn [evt]
-                                  (.preventDefault evt)
-                                  (.stopPropagation evt)
-                                  (trigger-event :undo {}))
-                :style          {:cursor      "pointer"
-                                 :margin-left "10px"
-                                 :height      "24px"
-                                 :opacity     (if (= hover :undo) 1 0.7)
-                                 :font-weight "bold"}}
-          [undo-icon]]
-         [:div {:id             :redo
-                :on-mouse-over  (fn [] (reset! hover-atom :redo))
-                :on-mouse-leave (fn [] (reset! hover-atom nil))
-                :on-click       (fn [evt]
-                                  (.preventDefault evt)
-                                  (.stopPropagation evt)
-                                  (trigger-event :redo {}))
-                :style          {:cursor      "pointer"
-                                 :height      "24px"
-                                 :opacity     (if (= hover :redo) 1 0.7)
-                                 :font-weight "bold"}}
-          [redo-icon]]
-         [:div {:id             :bold
-                :on-mouse-over  (fn [] (reset! hover-atom :bold))
-                :on-mouse-leave (fn [] (reset! hover-atom nil))
-                :on-click       (fn [evt]
-                                  (.preventDefault evt)
-                                  (trigger-event :insert-txt {:txt "**strong text**"}))
-                :style          {:cursor      "pointer"
-                                 :height      "24px"
-                                 :opacity     (if (= hover :bold) 1 0.7)
-                                 :font-weight "bold"}}
-          [bold-icon]]
-         [:div {:id             :emp
-                :on-mouse-over  (fn [] (reset! hover-atom :emp))
-                :on-mouse-leave (fn [] (reset! hover-atom nil))
-                :on-click       (fn [evt]
-                                  (.preventDefault evt)
-                                  (trigger-event :insert-txt {:txt "*emphasized text*"}))
-                :style          {:cursor      "pointer"
-                                 :height      "24px"
-                                 :opacity     (if (= hover :emp) 1 0.7)
-                                 :font-weight "bold"}}
-          [italic-icon]]
-         [:div {:id             :link
-                :on-mouse-over  (fn [] (reset! hover-atom :link))
-                :on-mouse-leave (fn [] (reset! hover-atom nil))
-                :on-click       (fn [evt]
-                                  (.preventDefault evt)
-                                  (trigger-event :insert-txt {:txt "[enter link description here][https://]\n"}))
-                :style          {:cursor      "pointer"
-                                 :height      "24px"
-                                 :opacity     (if (= hover :link) 1 0.7)
-                                 :font-weight "bold"}}
-          [insert-link-icon]]
-         [:div {:id             :misc
-                :on-mouse-over  (fn [] (reset! hover-atom :misc))
-                :on-mouse-leave (fn [] (reset! hover-atom nil))
-                :on-click       (fn [evt]
-                                  (.preventDefault evt)
-                                  (trigger-event :toggle-config {}))
-                :style          {:cursor      "pointer"
-                                 :height      "24px"
-                                 :opacity     (if (= hover :misc) 1 0.7)
-                                 :font-weight "bold"}}
-          [misc-icon]]
-         ]))))
+  (let [hover-atom (r/atom nil)
+        show-toolbar (get-in state [:config :show-toolbar])]
+    (when show-toolbar
+      (fn []
+        (let [hover (deref hover-atom)]
+          [:div {:style {:padding         "5px"
+                         :padding-left    "10px"
+                         :border          "1px dashed green"
+                         :width           "100%"
+                         :display         "flex"
+                         :justify-content "space-around"
+                         :align-items     "center"}}
+           [:div {:id             :undo
+                  :on-mouse-over  (fn [] (reset! hover-atom :undo))
+                  :on-mouse-leave (fn [] (reset! hover-atom nil))
+                  :on-click       (fn [evt]
+                                    (.preventDefault evt)
+                                    (.stopPropagation evt)
+                                    (trigger-event :undo {}))
+                  :style          {:cursor      "pointer"
+                                   :margin-left "10px"
+                                   :height      "24px"
+                                   :opacity     (if (= hover :undo) 1 0.7)
+                                   :font-weight "bold"}}
+            [undo-icon]]
+           [:div {:id             :redo
+                  :on-mouse-over  (fn [] (reset! hover-atom :redo))
+                  :on-mouse-leave (fn [] (reset! hover-atom nil))
+                  :on-click       (fn [evt]
+                                    (.preventDefault evt)
+                                    (.stopPropagation evt)
+                                    (trigger-event :redo {}))
+                  :style          {:cursor      "pointer"
+                                   :height      "24px"
+                                   :opacity     (if (= hover :redo) 1 0.7)
+                                   :font-weight "bold"}}
+            [redo-icon]]
+           [:div {:id             :bold
+                  :on-mouse-over  (fn [] (reset! hover-atom :bold))
+                  :on-mouse-leave (fn [] (reset! hover-atom nil))
+                  :on-click       (fn [evt]
+                                    (.preventDefault evt)
+                                    (trigger-event :insert-txt {:txt "**strong text**"}))
+                  :style          {:cursor      "pointer"
+                                   :height      "24px"
+                                   :opacity     (if (= hover :bold) 1 0.7)
+                                   :font-weight "bold"}}
+            [bold-icon]]
+           [:div {:id             :emp
+                  :on-mouse-over  (fn [] (reset! hover-atom :emp))
+                  :on-mouse-leave (fn [] (reset! hover-atom nil))
+                  :on-click       (fn [evt]
+                                    (.preventDefault evt)
+                                    (trigger-event :insert-txt {:txt "*emphasized text*"}))
+                  :style          {:cursor      "pointer"
+                                   :height      "24px"
+                                   :opacity     (if (= hover :emp) 1 0.7)
+                                   :font-weight "bold"}}
+            [italic-icon]]
+           [:div {:id             :link
+                  :on-mouse-over  (fn [] (reset! hover-atom :link))
+                  :on-mouse-leave (fn [] (reset! hover-atom nil))
+                  :on-click       (fn [evt]
+                                    (.preventDefault evt)
+                                    (trigger-event :insert-txt {:txt "[enter link description here][https://]\n"}))
+                  :style          {:cursor      "pointer"
+                                   :height      "24px"
+                                   :opacity     (if (= hover :link) 1 0.7)
+                                   :font-weight "bold"}}
+            [insert-link-icon]]
+           [:div {:id             :misc
+                  :on-mouse-over  (fn [] (reset! hover-atom :misc))
+                  :on-mouse-leave (fn [] (reset! hover-atom nil))
+                  :on-click       (fn [evt]
+                                    (.preventDefault evt)
+                                    (trigger-event :toggle-config {}))
+                  :style          {:cursor      "pointer"
+                                   :height      "24px"
+                                   :opacity     (if (= hover :misc) 1 0.7)
+                                   :font-weight "bold"}}
+            [misc-icon]]
+           ])))))
 
 (defn gutter
   [{:keys [state flatten-buffer]}]
-  (let [n-rows (count flatten-buffer)]
-    [:div {:id    "gutter"
-           :style {:width            (str (+ 1 (count (str n-rows))) "ch")
-                   :background-color "#e8e8e8"
-                   :direction        "rtl"
-                   :padding-right    "7px"
-                   :padding-left     "25px"
-                   :display          "inline-block"
-                   :height           (str (* n-rows (line-height state)) "px")
-                   :color            "#AAA"}}
-     (doall (map-indexed (fn [i _]
-                           [:span {:key   (str "row-num-" i)
-                                   :style {:position    "absolute"
-                                           :float       "right"
-                                           :height      "21px"
-                                           :font        "Monaco"
-                                           :font-family "monospace"
-                                           :font-size   (font-size state)
-                                           :transform   (str "translate(0px, " (* i (line-height state)) "px)")
-                                           }} (inc i)]) flatten-buffer))]))
+  (let [n-rows (count flatten-buffer)
+        show-line-numbers (get-in state [:config :show-line-numbers])
+        show-gutter (get-in state [:config :show-gutter])]
+    (when show-gutter
+      [:div {:id    "gutter"
+             :style {:width            (str (+ 1 (count (str n-rows))) "ch")
+                     :background-color "#e8e8e8"
+                     :direction        "rtl"
+                     :padding-right    "7px"
+                     :padding-left     "25px"
+                     :display          "inline-block"
+                     :height           (str (* n-rows (line-height state)) "px")
+                     :color            "#AAA"}}
+       (doall (map-indexed (fn [i _]
+                             [:span {:key   (str "row-num-" i)
+                                     :style {:position    "absolute"
+                                             :float       "right"
+                                             :height      "21px"
+                                             :font        "Monaco"
+                                             :font-family "monospace"
+                                             :font-size   (font-size state)
+                                             :transform   (str "translate(0px, " (* i (line-height state)) "px)")
+                                             }}
+                              (when show-line-numbers (inc i))
+                              ]) flatten-buffer))])))
 
 (defn focus!
   [el]
@@ -1501,11 +1518,15 @@
 (defn config-bar
   [{:keys [config]}]
   (let [expanded? (:expanded? config)]
-    [:div {:style {:border   "1px dashed orange"
-                   :position "absolute"
-                   :overflow "hidden"
-                   :width    (if expanded? "200px" "0px")
-                   :height   "50px"}} "Hi"]))
+    [:div {:style {:border           "1px dashed orange"
+                   :background-color "rgba(0,0,0,0.3)"
+                   :z-index          5
+                   :position         "absolute"
+                   :overflow         "hidden"
+                   :transition       "width 0.3s, height 0.3s"
+                   :width            (if expanded? "200px" "0px")
+                   :height           (if expanded? "200px" "0px")
+                   }} "Hi"]))
 
 (defn editor
   []
@@ -1574,8 +1595,6 @@
                                                               :outline   "none"}}]
                                     [:div {:id         "editor-area"
                                            :ref        set-editor-area-ref!
-                                           ;:ref        (fn [com]
-                                           ;              (swap! refs-atom assoc :editor-area com))
                                            :tab-index  0
                                            :on-click   (fn [] (focus! (interop/get-element-by-id "editor-input")))
                                            :draggable  false
@@ -1594,15 +1613,15 @@
                                                         :font-family         "monospace"}}
                                      [active-row {:state state :current-row current-row}]
                                      [:div {:id    "caret"
-                                            :style {:transform (str "translate(" (:x cursor) "px," (* (line-height state) current-row) "px)") ;; TODO
-                                                    :animation (when (empty? keys-down) "typing 3.5s steps(40, end), blink-caret .75s step-end infinite")
-                                                    :opacity   "0.3"
-                                                    :display   "block"
-                                                    :border    "1px solid black"
-                                                    :position  "absolute"
-                                                    :cursor    "text"
-                                                    :height    (str (line-height state) "px")
-                                                    :width     "1px"}}]
+                                            :style {:transform        (str "translate(" (:x cursor) "px," (* (line-height state) current-row) "px)") ;; TODO
+                                                    :animation        (when (empty? keys-down) "typing 3.5s steps(40, end), blink-caret .75s step-end infinite") ;; TODO remove css animation from index.html and move it in here
+                                                    :opacity          (get-in state [:config :cursor-opacity])
+                                                    :display          "block"
+                                                    :background-color (get-in state [:config :cursor-color])
+                                                    :position         "absolute"
+                                                    :cursor           "text"
+                                                    :height           (str (line-height state) "px")
+                                                    :width            (str (get-in state [:config :cursor-width]) "px")}}]
                                      (when-not (empty? selections)
                                        [:div {:id         "selections"
                                               :draggable  false
@@ -1617,7 +1636,7 @@
                                         (doall (map-indexed (fn [i {:keys [width top left]}]
                                                               [:div {:id    (str "selection-" i)
                                                                      :key   (str "selection-" i)
-                                                                     :style {:background "#B5D5FF"
+                                                                     :style {:background (get-in state [:config :selection-color])
                                                                              :position   "absolute"
                                                                              :height     (str (line-height state) "px")
                                                                              :width      (str width "px")
@@ -1634,13 +1653,14 @@
                                                                         row]) flatten-buffer)))
                                      ]
                                     ]
-                                   [:div {:style {:flex             1
-                                                  :height           "20px"
-                                                  :border           "1px solid #e4e4e4"
-                                                  :background-color "#f1f1f1"
-                                                  :font-size        12}}
-                                    [:span current-row " / " (x->char-pos state) " | " (count flatten-buffer)]
-                                    ]
+                                   (when (get-in state [:config :show-status-bar])
+                                     [:div {:style {:flex             1
+                                                    :height           "20px"
+                                                    :border           "1px solid #e4e4e4"
+                                                    :background-color "#f1f1f1"
+                                                    :font-size        12}}
+                                      [:span current-row " / " (x->char-pos state) " | " (count flatten-buffer)]
+                                      ])
                                    ]
                                   ]
                                  ]))})))
