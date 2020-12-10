@@ -36,17 +36,26 @@
   [loc]
   (set! (.-hash js/window.location) loc))
 
+(defn jsrect->cljsrect
+  [rect]
+  {:bottom (.-bottom rect)
+   :height (.-height rect)
+   :left   (.-left rect)
+   :right  (.-right rect)
+   :top    (.-top rect)
+   :width  (.-width rect)
+   :x      (.-x rect)
+   :y      (.-y rect)})
+
+(defn content-rect
+  [evt]
+  (-> (.-contentRect evt)
+      jsrect->cljsrect))
+
 (defn get-bounding-client-rect
   [el]
   (let [rect (js->clj (.getBoundingClientRect el))]
-    {:bottom (.-bottom rect)
-     :height (.-height rect)
-     :left   (.-left rect)
-     :right  (.-right rect)
-     :top    (.-top rect)
-     :width  (.-width rect)
-     :x      (.-x rect)
-     :y      (.-y rect)}))
+    (jsrect->cljsrect rect)))
 
 (defn mouse-x [evt] (.-clientX evt))
 (defn mouse-y [evt] (.-clientY evt))
