@@ -7,11 +7,10 @@
                                    space->space
                                    space->dash
                                    dash->space]]
-            [crumborn.view.editor :refer [editor]]
             [reagent.core :as r]
             [cljs.core.async :as async]
-            [markdown-to-hiccup.core :as m]
-            ))
+            [editoreable.core :refer [editor]]
+            [markdown-to-hiccup.core :as m]))
 
 
 (defn menu
