@@ -5,6 +5,7 @@ pipeline {
         stage('Build') {
             steps {
                echo 'Building..'
+               sh 'npm install'
                sh 'shadow-cljs release :app'
                echo 'Done building'
 
