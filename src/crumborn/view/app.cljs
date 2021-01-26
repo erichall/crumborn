@@ -367,33 +367,35 @@
 
 (defn portfolio
   [{:keys [trigger-event app-state-atom]}]
-  [:table
-   [:tbody
-    (map (fn [{:keys [title text tech date img]}]
-           [:<> {:key (str title text tech date img)}
-            [:tr {:style {:line-height 1}}
-             [:td {:col-span 2}
-              [:h1 {:style {:margin "0px"}} title]]]
-            [:tr {:style {:line-height 1}}
-             [:td
-              [:span {:style {:font-size "9pt" :color "gray" :margin-right "10px"}} date]
-              [:span {:style {:font-size "9pt" :color "gray" :margin-right "10px"}} " | "]
-              (map (fn [t] [:span {:key t :style {:font-size "9pt" :color "gray" :margin-right "5px"}} t]) tech)]
-             ]
-            [:tr
-             [:td {:col-span 2}
-              [:p
-               [:img {:src img :style {:float "right"} :float "right"}]
-               text
-               ]]]
-            [:tr {:style {:height "15px"}}]]
-           ) [
-              {:title "Cool projet" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
-              {:title "An app" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
-              {:title "Flight and Fly" :text "Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of \"de Finibus Bonorum et Malorum\" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, \"Lorem ipsum dolor sit amet..\", comes from a line in section 1.10.32.\n\nThe standard chunk of Lorem Ipsum used since the 1500s is reproduced below for those interested. Sections 1.10.32 and 1.10.33 from \"de Finibus Bonorum et Malorum\" by Cicero are also reproduced in their exact original form, accompanied by English versions from the 1914 translation by H. Rackham." :tech ["React" "GraphQL"] :date "2020-03-01" :img "https://picsum.photos/200"}
-              {:title "The stuff is real" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
-              {:title "Another homepage" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
-              ])]])
+  [:h3 "Under Construction"]
+  ;[:table
+  ; [:tbody
+  ;  (map (fn [{:keys [title text tech date img]}]
+  ;         [:<> {:key (str title text tech date img)}
+  ;          [:tr {:style {:line-height 1}}
+  ;           [:td {:col-span 2}
+  ;            [:h1 {:style {:margin "0px"}} title]]]
+  ;          [:tr {:style {:line-height 1}}
+  ;           [:td
+  ;            [:span {:style {:font-size "9pt" :color "gray" :margin-right "10px"}} date]
+  ;            [:span {:style {:font-size "9pt" :color "gray" :margin-right "10px"}} " | "]
+  ;            (map (fn [t] [:span {:key t :style {:font-size "9pt" :color "gray" :margin-right "5px"}} t]) tech)]
+  ;           ]
+  ;          [:tr
+  ;           [:td {:col-span 2}
+  ;            [:p
+  ;             [:img {:src img :style {:float "right"} :float "right"}]
+  ;             text
+  ;             ]]]
+  ;          [:tr {:style {:height "15px"}}]]
+  ;         ) [
+  ;            {:title "Cool projet" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
+  ;            {:title "An app" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
+  ;            {:title "Flight and Fly" :text "Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of \"de Finibus Bonorum et Malorum\" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, \"Lorem ipsum dolor sit amet..\", comes from a line in section 1.10.32.\n\nThe standard chunk of Lorem Ipsum used since the 1500s is reproduced below for those interested. Sections 1.10.32 and 1.10.33 from \"de Finibus Bonorum et Malorum\" by Cicero are also reproduced in their exact original form, accompanied by English versions from the 1914 translation by H. Rackham." :tech ["React" "GraphQL"] :date "2020-03-01" :img "https://picsum.photos/200"}
+  ;            {:title "The stuff is real" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
+  ;            {:title "Another homepage" :text "This is a cool project that I worked on." :tech ["React" "GraphQL"] :date "2020-03-01"}
+  ;            ])]]
+  )
 
 (defn login
   [{:keys [trigger-event]}]

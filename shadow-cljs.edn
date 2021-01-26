@@ -20,5 +20,4 @@
                 :test {:target       :node-test
                        :ns-regexp    "crumborn"
                        :source-paths ["src"]
-                       :autorun      true
-                       }}}
+                       :autorun      true}}}
