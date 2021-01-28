@@ -2,13 +2,16 @@
 
 It doesn't mean anything, it's my homepage. Free from enterprise extravaganza 👍
 
-TODO add docs foe this!
+TODO add docs for this!
 
-Issues
+### Dev Issues
 
-Problem 1
-root: repl stuck in "Prompt will show when Figwheel connects to your application" when piggybacking nREPL
-solution: 
+**Problem 1**
+
+**root**: repl stuck in "Prompt will show when Figwheel connects to your application" when piggybacking nREPL
+
+**solution**: 
+```
     Not helping: rm -rf ~/.m2 && lein clean 
     Not helping: removing conf in user.clj dev argument to fig-start
     Not helping: running with rlwrap, rlwarp lein figwheel
@@ -29,14 +32,18 @@ solution:
                     lein clean
                     lein figwheel
     SOUTION: Rolling back to clojurescript version 1.10.520 FROM 1.10.758, this actually works and the repl is not stuck in Prompt .....
-    
-Problem 2
-root: repl is not seeing the latest changes in atoms
+```
 
 
-Problem 3
-root: I think lein figwheel and cljsbuild is outdated, should we migrate to shadow-cljs?
-Migration:
+**Problem 2**
+
+**root**: repl is not seeing the latest changes in atoms
+
+
+**Problem 3**
+
+**root**: I think lein figwheel and cljsbuild is outdated, should we migrate to shadow-cljs?
+```Migration:
     1) create a deps.edn file
     2) run $ npm install --save-dev shadow-cljs
     3) npm init
@@ -45,14 +52,18 @@ Migration:
     6) install all react stuff it's complaning about
     7) it should be running, fire up cursive and connect with nrepl
     8) once repl is up, type (shadow/repl :app) and rock and roll
-    
-Problem 4
-root: No such namespace: js
-solution: 
+```
+
+
+**Problem 4**
+
+**root**: No such namespace: js
+
+**solution**:
+```
     first go to the browser window and reload it
     then in a cursive repl run:
     (shadow/watch :app)
     (shadow/repl :app) // :app is the id you are running from shadow-cljs.edn
-    
-    
+    ``` 
 
