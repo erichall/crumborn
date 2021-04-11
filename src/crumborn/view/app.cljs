@@ -387,7 +387,7 @@
 
 (defn portfolio
   [{:keys [trigger-event app-state-atom]}]
-  (let [data [{:image "code.png"
+  (let [data [{:image "/images/code.png"
                :key   :conway
                :date  "2021-04-08"
                :title "Conway"
@@ -400,7 +400,7 @@
                        [:span {:style {:margin-left "10px"}} "#js"]
                        [:span {:style {:margin-left "10px"}} "#performance"]
                        [:span {:style {:margin-left "10px"}} "#hashlife"]]}
-              {:image "https://picsum.photos/200"
+              {:image "/images/quadtree.png"
                :key   :quadtree
                :date  "2021-02-08"
                :title "Quadtree"
@@ -412,7 +412,7 @@
                        [:span "#clojure"]
                        [:span {:style {:margin-left "10px"}} "#data-structure"]
                        [:span {:style {:margin-left "10px"}} "#performance"]]}
-              {:image "https://picsum.photos/200"
+              {:image "/images/text-editor.png"
                :key   :text-editor
                :date  "2021-02-01"
                :title "A text editor"
@@ -424,7 +424,7 @@
                        [:span "#clojurescript"]
                        [:span {:style {:margin-left "10px"}} "#editor"]
                        [:span {:style {:margin-left "10px"}} "#data"]]}
-              {:image "https://picsum.photos/200"
+              {:image "/images/webgl-30.png"
                :key   :webgl
                :date  "2020-12-02"
                :title "WebGL with Clojure?"
@@ -436,7 +436,7 @@
                        [:span "#clojurescript"]
                        [:span {:style {:margin-left "10px"}} "#WebGL"]
                        [:span {:style {:margin-left "10px"}} "#interop"]]}
-              {:image "https://picsum.photos/200"
+              {:image "/images/nordnet-cli.png"
                :key   :stock-trading
                :date  "2020-10-02"
                :title "Nordnet stock integration"
@@ -448,7 +448,7 @@
                        [:span {:style {:margin-left "10px"}} "#web-automation"]
                        [:span {:style {:margin-left "10px"}} "#stocks"]
                        [:span {:style {:margin-left "10px"}} "#web-api"]]}
-              {:image "https://picsum.photos/200"
+              {:image "/images/a-homepage.png"
                :key   :crumborn
                :date  "2020-09-01"
                :title "A Homepage"
@@ -461,7 +461,7 @@
                        [:span {:style {:margin-left "10px"}} "#websocket"]
                        [:span {:style {:margin-left "10px"}} "#dynamic-data"]
                        [:span {:style {:margin-left "10px"}} "#themes"]]}
-              {:image "https://picsum.photos/200"
+              {:image "/images/a-homepage.png"
                :key   :crumborn-backend
                :date  "2020-09-01"
                :title "Backend service for my homepage"
@@ -473,7 +473,7 @@
                        [:span "#clojure"]
                        [:span {:style {:margin-left "10px"}} "#oauth"]
                        [:span {:style {:margin-left "10px"}} "#websocket"]]}
-              {:image "https://picsum.photos/200"
+              {:image "/images/code.png"
                :key   :nginx
                :date  "2020-09-01"
                :title "Automated Nginx banning tool"
@@ -484,7 +484,7 @@
                        [:span "#clojure"]
                        [:span {:style {:margin-left "10px"}} "#nginx"]
                        [:span {:style {:margin-left "10px"}} "#cli"]]}
-              {:image "https://picsum.photos/200"
+              {:image "/images/thesis.png"
                :key   :thesis
                :date  "2019-11-07"
                :title "Relation Extraction on Swedish Text by the Use of Semantic Fields and Deep Multi-Channel Convolutional Neural Networks."
@@ -496,7 +496,7 @@
                        [:span {:style {:margin-left "10px"}} "#deep-learning"]
                        [:span {:style {:margin-left "10px"}} "#google-cloud"]
                        [:span {:style {:margin-left "10px"}} "#python"]]}
-              {:image "https://picsum.photos/200"
+              {:image "/images/folk-rnn.png"
                :key   :rnn-folk
                :date  "2019-04-10"
                :title "We generated Swedish Folk music using LSTM and RNN. The work we did is described din the paper linked below."
@@ -509,7 +509,7 @@
                        [:span {:style {:margin-left "10px"}} "#deep-learning"]
                        [:span {:style {:margin-left "10px"}} "#google-cloud"]
                        [:span {:style {:margin-left "10px"}} "#python"]]}
-              {:image "https://picsum.photos/200"
+              {:image "/images/fablab.png"
                :key   :fablab
                :date  "2018-05-10"
                :title "Makerspace FabLab projects"
@@ -522,7 +522,7 @@
                        [:span {:style {:margin-left "10px"}} "#text-processing"]
                        [:span {:style {:margin-left "10px"}} "#python"]
                        [:span {:style {:margin-left "10px"}} "#docker"]]}
-              {:image "https://picsum.photos/200"
+              {:image "/images/sentimental-an.png"
                :key   :reddit-uuic
                :date  "2018-04-19"
                :title "Sentiment Analysis on Reddit"
@@ -537,7 +537,7 @@
                        [:span {:style {:margin-left "10px"}} "#text-processing"]
                        [:span {:style {:margin-left "10px"}} "#python"]
                        [:span {:style {:margin-left "10px"}} "#docker"]]}
-              {:image "https://picsum.photos/200"
+              {:image "/images/code.png"
                :key   :matplanen
                :date  "2018-01-19"
                :title "Matplanen"
