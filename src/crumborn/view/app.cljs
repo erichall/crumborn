@@ -370,7 +370,9 @@
                  :margin-bottom  "20px"
                  :width          "100%"
                  :flex-direction "row"}}
-   [:img {:src image}]
+   [:img {:src   image
+          :style {:width  "50%"
+                  :height "50%"}}]
    [:div {:style {:display     "column"
                   :margin-left "10px"
                   :flex        1}}
@@ -397,9 +399,9 @@
                        [:a {:style {:margin-left "10px"} :href "https://github.com/erichall/conway"} "Github"]]
                :tags  [:<>
                        [:span "#clojurescript"]
-                       [:span {:style {:margin-left "10px"}} "#js"]
-                       [:span {:style {:margin-left "10px"}} "#performance"]
-                       [:span {:style {:margin-left "10px"}} "#hashlife"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#js"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#performance"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#hashlife"]]}
               {:image "/images/quadtree.png"
                :key   :quadtree
                :date  "2021-02-08"
@@ -410,8 +412,8 @@
                        [:a {:style {:margin-left "10px"} :href "https://github.com/erichall/quadtree"} "Github"]]
                :tags  [:<>
                        [:span "#clojure"]
-                       [:span {:style {:margin-left "10px"}} "#data-structure"]
-                       [:span {:style {:margin-left "10px"}} "#performance"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#data-structure"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#performance"]]}
               {:image "/images/text-editor.png"
                :key   :text-editor
                :date  "2021-02-01"
@@ -422,8 +424,8 @@
                :text  "Built a text editor with clojurescript from raw metal and divs."
                :tags  [:<>
                        [:span "#clojurescript"]
-                       [:span {:style {:margin-left "10px"}} "#editor"]
-                       [:span {:style {:margin-left "10px"}} "#data"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#editor"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#data"]]}
               {:image "/images/webgl-30.png"
                :key   :webgl
                :date  "2020-12-02"
@@ -434,8 +436,8 @@
                :text  "Can you build stuff with WebGL and the interoperability Clojurescript offers with the JS landscape? Yes you can! This is my attempt to learn WebGL and push through it with Clojurescript."
                :tags  [:<>
                        [:span "#clojurescript"]
-                       [:span {:style {:margin-left "10px"}} "#WebGL"]
-                       [:span {:style {:margin-left "10px"}} "#interop"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#WebGL"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#interop"]]}
               {:image "/images/nordnet-cli.png"
                :key   :stock-trading
                :date  "2020-10-02"
@@ -445,9 +447,9 @@
                        [:a {:style {:margin-left "0px"} :href "https://github.com/erichall/nordnet-magic"} "Github"]]
                :tags  [:<>
                        [:span "#clojure"]
-                       [:span {:style {:margin-left "10px"}} "#web-automation"]
-                       [:span {:style {:margin-left "10px"}} "#stocks"]
-                       [:span {:style {:margin-left "10px"}} "#web-api"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#web-automation"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#stocks"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#web-api"]]}
               {:image "/images/a-homepage.png"
                :key   :crumborn
                :date  "2020-09-01"
@@ -458,9 +460,9 @@
                :text  "My personal homepage frontend parts. Built, yes you guessed it, with Clojurescript. Capable of hosting a custom made blog portal and admin configurations. Almost all data is fetched through a websocket, why this complexity for a personal homepage?!"
                :tags  [:<>
                        [:span "#clojurescript"]
-                       [:span {:style {:margin-left "10px"}} "#websocket"]
-                       [:span {:style {:margin-left "10px"}} "#dynamic-data"]
-                       [:span {:style {:margin-left "10px"}} "#themes"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#websocket"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#dynamic-data"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#themes"]]}
               {:image "/images/a-homepage.png"
                :key   :crumborn-backend
                :date  "2020-09-01"
@@ -471,8 +473,8 @@
                :text  "Backend service for my homepage. Built with Clojure."
                :tags  [:<>
                        [:span "#clojure"]
-                       [:span {:style {:margin-left "10px"}} "#oauth"]
-                       [:span {:style {:margin-left "10px"}} "#websocket"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#oauth"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#websocket"]]}
               {:image "/images/code.png"
                :key   :nginx
                :date  "2020-09-01"
@@ -482,8 +484,8 @@
                :text  "A tool that monitors your Nginx logs for hackers and blacklist them."
                :tags  [:<>
                        [:span "#clojure"]
-                       [:span {:style {:margin-left "10px"}} "#nginx"]
-                       [:span {:style {:margin-left "10px"}} "#cli"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#nginx"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#cli"]]}
               {:image "/images/thesis.png"
                :key   :thesis
                :date  "2019-11-07"
@@ -493,9 +495,9 @@
                :text  "The relation extraction systems created in this thesis include deep multi-channel convolutional neural networks and Word2Vec embeddings."
                :tags  [:<>
                        [:span "#rnn"]
-                       [:span {:style {:margin-left "10px"}} "#deep-learning"]
-                       [:span {:style {:margin-left "10px"}} "#google-cloud"]
-                       [:span {:style {:margin-left "10px"}} "#python"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#deep-learning"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#google-cloud"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#python"]]}
               {:image "/images/folk-rnn.png"
                :key   :rnn-folk
                :date  "2019-04-10"
@@ -506,9 +508,9 @@
                :text  "Extending a RNN model to generate Swedish folk music."
                :tags  [:<>
                        [:span "#rnn"]
-                       [:span {:style {:margin-left "10px"}} "#deep-learning"]
-                       [:span {:style {:margin-left "10px"}} "#google-cloud"]
-                       [:span {:style {:margin-left "10px"}} "#python"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#deep-learning"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#google-cloud"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#python"]]}
               {:image "/images/fablab.png"
                :key   :fablab
                :date  "2018-05-10"
@@ -518,10 +520,10 @@
                        [:a {:href "http://cucfablab.org/author/ceh4/"} "Fablab"]]
                :tags  [:<>
                        [:span "#js"]
-                       [:span {:style {:margin-left "10px"}} "#nlp"]
-                       [:span {:style {:margin-left "10px"}} "#text-processing"]
-                       [:span {:style {:margin-left "10px"}} "#python"]
-                       [:span {:style {:margin-left "10px"}} "#docker"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#nlp"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#text-processing"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#python"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#docker"]]}
               {:image "/images/sentimental-an.png"
                :key   :reddit-uuic
                :date  "2018-04-19"
@@ -533,20 +535,20 @@
                        ]
                :tags  [:<>
                        [:span "#js"]
-                       [:span {:style {:margin-left "10px"}} "#nlp"]
-                       [:span {:style {:margin-left "10px"}} "#text-processing"]
-                       [:span {:style {:margin-left "10px"}} "#python"]
-                       [:span {:style {:margin-left "10px"}} "#docker"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#nlp"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#text-processing"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#python"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#docker"]]}
               {:image "/images/code.png"
                :key   :matplanen
                :date  "2018-01-19"
                :title "Matplanen"
                :text  "A iOS/Android app to plan your weekly meal by querying the unofficial ICA API for recipes. It's never published though!"
                :tags  [:<>
-                       [:span {:style {:margin-left "0x"}} "#react-native"]
-                       [:span {:style {:margin-left "10px"}} "#react"]
-                       [:span {:style {:margin-left "10px"}} "#redux"]
-                       [:span {:style {:margin-left "10px"}} "#mobile"]]}
+                       [:span {:style {:margin-left "0x" :white-space "nowrap"}} "#react-native"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#react"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#redux"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#mobile"]]}
               ]
         ]
     [:div
