@@ -61,11 +61,9 @@
 (defn front-page
   [{:keys [page-state app-state-atom]}]
   ;; TODO
-  (if (= "dev" crumborn.core/env)
-    [editor]
-    [:div {:style {:padding-top "20px"}}
-     [:p (get-in page-state [:intro])]
-     [:p (get-in page-state [:about])]])
+  [:div {:style {:padding-top "20px"}}
+   [:p (get-in page-state [:intro])]
+   [:p (get-in page-state [:about])]]
   )
 
 (defn dashboard
@@ -365,9 +363,203 @@
                  ]
                 [:tr {:style {:height "15px"}}]]) (reverse (sort-by :date-created (vals posts))))]])))
 
+(defn portfolio-card
+  [{:keys [image title text tags key links date]}]
+  [:div {:key   key
+         :style {:display        "flex"
+                 :margin-bottom  "20px"
+                 :width          "100%"
+                 :flex-direction "row"}}
+   [:img {:src image}]
+   [:div {:style {:display     "column"
+                  :margin-left "10px"
+                  :flex        1}}
+    [:h2 {:style {:margin 0}} title]
+    [:span date]
+    [:p text]
+
+    links
+
+    [:div {:style {:display        "flex"
+                   :align-self     "flex-end"
+                   :flex-direction "row"}}
+     tags]]])
+
 (defn portfolio
   [{:keys [trigger-event app-state-atom]}]
-  [:h3 "Under Construction"]
+  (let [data [{:image "code.png"
+               :key   :conway
+               :date  "2021-04-08"
+               :title "Conway"
+               :text  "We made a couple of versions of Conway's game of life."
+               :links [:div {:style {:display "flex" :flex-direction "row"}}
+                       [:a {:href "https://gol.erkanp.dev/"} "Live"]
+                       [:a {:style {:margin-left "10px"} :href "https://github.com/erichall/conway"} "Github"]]
+               :tags  [:<>
+                       [:span "#clojurescript"]
+                       [:span {:style {:margin-left "10px"}} "#js"]
+                       [:span {:style {:margin-left "10px"}} "#performance"]
+                       [:span {:style {:margin-left "10px"}} "#hashlife"]]}
+              {:image "https://picsum.photos/200"
+               :key   :quadtree
+               :date  "2021-02-08"
+               :title "Quadtree"
+               :text  "To understand Hashlife you need to grasp the Quadtree datastructure, this is my attempt to visualise it together with Clojure."
+               :links [:div {:style {:display "flex" :flex-direction "row"}}
+                       [:a {:href "https://quadtree.erkanp.dev/"} "Live"]
+                       [:a {:style {:margin-left "10px"} :href "https://github.com/erichall/quadtree"} "Github"]]
+               :tags  [:<>
+                       [:span "#clojure"]
+                       [:span {:style {:margin-left "10px"}} "#data-structure"]
+                       [:span {:style {:margin-left "10px"}} "#performance"]]}
+              {:image "https://picsum.photos/200"
+               :key   :text-editor
+               :date  "2021-02-01"
+               :title "A text editor"
+               :links [:div {:style {:display "flex" :flex-direction "row"}}
+                       [:a {:href "https://editoreable.erkanp.dev/"} "Live"]
+                       [:a {:style {:margin-left "10px"} :href "https://github.com/erichall/editoreable"} "Github"]]
+               :text  "Built a text editor with clojurescript from raw metal and divs."
+               :tags  [:<>
+                       [:span "#clojurescript"]
+                       [:span {:style {:margin-left "10px"}} "#editor"]
+                       [:span {:style {:margin-left "10px"}} "#data"]]}
+              {:image "https://picsum.photos/200"
+               :key   :webgl
+               :date  "2020-12-02"
+               :title "WebGL with Clojure?"
+               :links [:div {:style {:display "flex" :flex-direction "row"}}
+                       [:a {:href "https://webgl-30.erkanp.dev/"} "Live"]
+                       [:a {:style {:margin-left "10px"} :href "https://github.com/erichall/webgl-30"} "Github"]]
+               :text  "Can you build stuff with WebGL and the interoperability Clojurescript offers with the JS landscape? Yes you can! This is my attempt to learn WebGL and push through it with Clojurescript."
+               :tags  [:<>
+                       [:span "#clojurescript"]
+                       [:span {:style {:margin-left "10px"}} "#WebGL"]
+                       [:span {:style {:margin-left "10px"}} "#interop"]]}
+              {:image "https://picsum.photos/200"
+               :key   :stock-trading
+               :date  "2020-10-02"
+               :title "Nordnet stock integration"
+               :text  "Automize stock trading and buying strategy in Nordet in a fragile way."
+               :links [:div {:style {:display "flex" :flex-direction "row"}}
+                       [:a {:style {:margin-left "0px"} :href "https://github.com/erichall/nordnet-magic"} "Github"]]
+               :tags  [:<>
+                       [:span "#clojure"]
+                       [:span {:style {:margin-left "10px"}} "#web-automation"]
+                       [:span {:style {:margin-left "10px"}} "#stocks"]
+                       [:span {:style {:margin-left "10px"}} "#web-api"]]}
+              {:image "https://picsum.photos/200"
+               :key   :crumborn
+               :date  "2020-09-01"
+               :title "A Homepage"
+               :links [:div {:style {:display "flex" :flex-direction "row"}}
+                       [:a {:href "https://erkanp.dev/"} "Live"]
+                       [:a {:style {:margin-left "10px"} :href "https://github.com/erichall/crumborn"} "Github"]]
+               :text  "My personal homepage frontend parts. Built, yes you guessed it, with Clojurescript. Capable of hosting a custom made blog portal and admin configurations. Almost all data is fetched through a websocket, why this complexity for a personal homepage?!"
+               :tags  [:<>
+                       [:span "#clojurescript"]
+                       [:span {:style {:margin-left "10px"}} "#websocket"]
+                       [:span {:style {:margin-left "10px"}} "#dynamic-data"]
+                       [:span {:style {:margin-left "10px"}} "#themes"]]}
+              {:image "https://picsum.photos/200"
+               :key   :crumborn-backend
+               :date  "2020-09-01"
+               :title "Backend service for my homepage"
+               :links [:div {:style {:display "flex" :flex-direction "row"}}
+                       [:a {:href "https://erkanp.dev/"} "Live"]
+                       [:a {:style {:margin-left "10px"} :href "https://github.com/erichall/mypage-engine"} "Github"]]
+               :text  "Backend service for my homepage. Built with Clojure."
+               :tags  [:<>
+                       [:span "#clojure"]
+                       [:span {:style {:margin-left "10px"}} "#oauth"]
+                       [:span {:style {:margin-left "10px"}} "#websocket"]]}
+              {:image "https://picsum.photos/200"
+               :key   :nginx
+               :date  "2020-09-01"
+               :title "Automated Nginx banning tool"
+               :links [:div {:style {:display "flex" :flex-direction "row"}}
+                       [:a {:href "https://github.com/erichall/nginx-saviour"} "Github"]]
+               :text  "A tool that monitors your Nginx logs for hackers and blacklist them."
+               :tags  [:<>
+                       [:span "#clojure"]
+                       [:span {:style {:margin-left "10px"}} "#nginx"]
+                       [:span {:style {:margin-left "10px"}} "#cli"]]}
+              {:image "https://picsum.photos/200"
+               :key   :thesis
+               :date  "2019-11-07"
+               :title "Relation Extraction on Swedish Text by the Use of Semantic Fields and Deep Multi-Channel Convolutional Neural Networks."
+               :links [:div {:style {:display "flex" :flex-direction "row"}}
+                       [:a {:href "http://kth.diva-portal.org/smash/record.jsf?pid=diva2%3A1361475&dswid=-3981"} "Paper"]]
+               :text  "The relation extraction systems created in this thesis include deep multi-channel convolutional neural networks and Word2Vec embeddings."
+               :tags  [:<>
+                       [:span "#rnn"]
+                       [:span {:style {:margin-left "10px"}} "#deep-learning"]
+                       [:span {:style {:margin-left "10px"}} "#google-cloud"]
+                       [:span {:style {:margin-left "10px"}} "#python"]]}
+              {:image "https://picsum.photos/200"
+               :key   :rnn-folk
+               :date  "2019-04-10"
+               :title "We generated Swedish Folk music using LSTM and RNN. The work we did is described din the paper linked below."
+               :links [:div {:style {:display "flex" :flex-direction "row"}}
+                       [:a {:href "http://kth.diva-portal.org/smash/record.jsf?pid=diva2%3A1303669&dswid=1386"} "Paper"]
+                       [:a {:style {:margin-left "10px"} :href "https://github.com/erichall/folk-rnn"} "Github"]]
+               :text  "Extending a RNN model to generate Swedish folk music."
+               :tags  [:<>
+                       [:span "#rnn"]
+                       [:span {:style {:margin-left "10px"}} "#deep-learning"]
+                       [:span {:style {:margin-left "10px"}} "#google-cloud"]
+                       [:span {:style {:margin-left "10px"}} "#python"]]}
+              {:image "https://picsum.photos/200"
+               :key   :fablab
+               :date  "2018-05-10"
+               :title "Makerspace FabLab projects"
+               :text  "These projects introduced me to the art of making stuff. A few projects with to show for during my time at UIUC."
+               :links [:div {:style {:display "flex" :flex-direction "row"}}
+                       [:a {:href "http://cucfablab.org/author/ceh4/"} "Fablab"]]
+               :tags  [:<>
+                       [:span "#js"]
+                       [:span {:style {:margin-left "10px"}} "#nlp"]
+                       [:span {:style {:margin-left "10px"}} "#text-processing"]
+                       [:span {:style {:margin-left "10px"}} "#python"]
+                       [:span {:style {:margin-left "10px"}} "#docker"]]}
+              {:image "https://picsum.photos/200"
+               :key   :reddit-uuic
+               :date  "2018-04-19"
+               :title "Sentiment Analysis on Reddit"
+               :text  "Sentiment Analysis for the subreddit forum UUIC."
+               :links [:div {:style {:display "flex" :flex-direction "row"}}
+                       [:a {:href "https://github.com/erichall/UIUCSentimentFrontend"} "Github client"]
+                       [:a {:style {:margin-left "10px"} :href "https://github.com/erichall/UIUCSentimentBackend"} "Github service"]
+                       ]
+               :tags  [:<>
+                       [:span "#js"]
+                       [:span {:style {:margin-left "10px"}} "#nlp"]
+                       [:span {:style {:margin-left "10px"}} "#text-processing"]
+                       [:span {:style {:margin-left "10px"}} "#python"]
+                       [:span {:style {:margin-left "10px"}} "#docker"]]}
+              {:image "https://picsum.photos/200"
+               :key   :matplanen
+               :date  "2018-01-19"
+               :title "Matplanen"
+               :text  "A iOS/Android app to plan your weekly meal by querying the unofficial ICA API for recipes. It's never published though!"
+               :tags  [:<>
+                       [:span {:style {:margin-left "0x"}} "#react-native"]
+                       [:span {:style {:margin-left "10px"}} "#react"]
+                       [:span {:style {:margin-left "10px"}} "#redux"]
+                       [:span {:style {:margin-left "10px"}} "#mobile"]]}
+              ]
+        ]
+    [:div
+     (map (fn [d]
+            [:div {:key   (str (:key d) "-con")
+                   :style {:margin-bottom "20px"}}
+             (portfolio-card d)
+             [:hr]
+             ]
+
+            ) data)]
+    )
+  ;[:h3 "Under Construction"]
   ;[:table
   ; [:tbody
   ;  (map (fn [{:keys [title text tech date img]}]
