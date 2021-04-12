@@ -370,9 +370,6 @@
                  :margin-bottom  "20px"
                  :width          "100%"
                  :flex-direction "row"}}
-   [:img {:src   image
-          :style {:width  "50%"
-                  :height "50%"}}]
    [:div {:style {:display     "column"
                   :margin-left "10px"
                   :flex        1}}
@@ -385,11 +382,16 @@
     [:div {:style {:display        "flex"
                    :align-self     "flex-end"
                    :flex-direction "row"}}
-     tags]]])
+     tags]]
+
+   [:img {:src   image
+          :style {:width  "50%"
+                  :height "50%"}}]
+   ])
 
 (defn portfolio
   [{:keys [trigger-event app-state-atom]}]
-  (let [data [{:image "/images/code.png"
+  (let [data [{:image "/images/conway.png"
                :key   :conway
                :date  "2021-04-08"
                :title "Conway"
@@ -520,10 +522,10 @@
                        [:a {:href "http://cucfablab.org/author/ceh4/"} "Fablab"]]
                :tags  [:<>
                        [:span "#js"]
-                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#nlp"]
-                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#text-processing"]
-                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#python"]
-                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#docker"]]}
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#maker"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#production"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#3d-printing"]
+                       [:span {:style {:margin-left "10px" :white-space "nowrap"}} "#fabrication"]]}
               {:image "/images/sentimental-an.png"
                :key   :reddit-uuic
                :date  "2018-04-19"
@@ -558,7 +560,6 @@
              (portfolio-card d)
              [:hr]
              ]
-
             ) data)]
     )
   ;[:h3 "Under Construction"]
