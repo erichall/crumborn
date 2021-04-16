@@ -371,7 +371,7 @@
                  :width          "100%"
                  :flex-direction "row"}}
    [:div {:style {:display     "column"
-                  :margin-left "10px"
+                  :margin-right "10px"
                   :flex        1}}
     [:h2 {:style {:margin 0}} title]
     [:span date]
